@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+dist/
+build/
+out/
+.turbo/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# logs & temp
+*.log
+*.tmp
+coverage/
+playwright-report/
+test-results/
+
+# os / editor
+.DS_Store
+Thumbs.db
+
+# local
+/AGENTS.md
+/CLAUDE.md
+/docs/
+/.claude/
+apps/web/AGENTS.md
+apps/web/CLAUDE.md

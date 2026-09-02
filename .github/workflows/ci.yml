@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: harth
+          POSTGRES_PASSWORD: harth_dev
+          POSTGRES_DB: harth_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U harth"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm lint
+
+      - run: pnpm test
+        env:
+          HARTH_TEST_DATABASE_URL: postgres://harth:harth_dev@localhost:5433/harth_test
+
+      - run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: harth
+          POSTGRES_PASSWORD: harth_dev
+          POSTGRES_DB: harth_e2e
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U harth"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter e2e exec playwright install --with-deps chromium
+
+      - run: pnpm e2e
+        env:
+          HARTH_TEST_DATABASE_URL: postgres://harth:harth_dev@localhost:5434/harth_e2e
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 30
+
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: |
+          {
+            echo POSTGRES_PASSWORD=ci-postgres-password
+            echo BETTER_AUTH_SECRET=ci-only-secret-0123456789abcdef0123456789abcdef
+            echo SITE_URL=http://localhost
+          } > .env
+
+      - run: docker compose up -d --build --wait --wait-timeout 600
+
+      - run: |
+          curl -fsS http://localhost/health
+          curl -fsS http://localhost/ | grep -q 火塘
+
+      - run: |
+          curl -fsS -X POST http://localhost/api/auth/sign-up/email -H "Content-Type: application/json" -H "Origin: http://localhost" -d '{"name":"冒烟","email":"smoke@example.com","password":"smoke-password"}' | grep -q '"user"'
+
+      - if: failure()
+        run: docker compose logs
+
+      - if: always()
+        run: docker compose down -v
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

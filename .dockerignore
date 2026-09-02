@@ -1,0 +1,14 @@
+.git
+node_modules
+**/node_modules
+**/.next
+.env
+.env.*
+!.env.example
+docs
+.claude
+AGENTS.md
+CLAUDE.md
+e2e/test-results
+e2e/playwright-report
+**/*.log

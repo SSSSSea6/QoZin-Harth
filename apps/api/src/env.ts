@@ -1,4 +1,6 @@
 import { config } from 'dotenv'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // 仓库根 .env，已有的进程环境变量优先
@@ -30,6 +32,20 @@ export const env = {
   BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? 'http://localhost:3001',
   API_PORT: Number(process.env.API_PORT ?? 3001),
   WEB_URL: process.env.WEB_URL ?? 'http://localhost:3000',
+  // 工具页面的源；必须与 WEB_URL 不同源，默认用 api 自己的地址
+  TOOL_ORIGIN: process.env.HARTH_TOOL_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:3001',
+  TOOLS_DIR: process.env.HARTH_TOOLS_DIR ?? join(homedir(), '.harth', 'tools'),
+  ADMIN_EMAILS: (process.env.HARTH_ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+  REVIEW: process.env.HARTH_REVIEW_API_KEY
+    ? {
+        apiUrl: process.env.HARTH_REVIEW_API_URL ?? 'https://api.deepseek.com/v1',
+        apiKey: process.env.HARTH_REVIEW_API_KEY,
+        model: process.env.HARTH_REVIEW_MODEL ?? 'deepseek-chat',
+      }
+    : null,
   TEST_HOOKS: process.env.HARTH_TEST_HOOKS === '1',
   JOBS: process.env.HARTH_JOBS !== '0',
 }

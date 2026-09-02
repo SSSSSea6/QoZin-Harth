@@ -32,6 +32,7 @@ export default defineConfig({
         BETTER_AUTH_SECRET: 'e2e-only-secret-never-use-in-production',
         HARTH_TEST_HOOKS: '1',
         HARTH_JOBS: '0',
+        HARTH_ADMIN_EMAILS: 'admin@e2e.test',
       },
     },
     {

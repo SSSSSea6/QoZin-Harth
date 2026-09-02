@@ -36,8 +36,9 @@
 - [x] 第一个供需模板：二手（发布 → 应答 → 交接 → 互评）
 - [x] 圈子生命周期：添柴与熄灭
 - [x] 本地一键启动（见下）
-- [ ] 开发者 CLI：把你做的工具一键接进火塘
-- [ ] 工具市场：按圈安装、权限清单、沙箱
+- [x] 开发者 CLI：把你做的工具接进火塘
+- [x] 工具市场：AI 审核上架、按圈安装、权限清单、独立源沙箱
+- [ ] 工具的后端代码、定时任务与外部集成
 
 第一个火塘在南京航空航天大学点燃，之后是更多学校、社区和任何真实的圈子。
 
@@ -55,6 +56,19 @@ pnpm dev                   # web :3000，api :3001
 数据库也可以用 `docker compose up -d db`。Linux 上请用 Docker，内嵌的 Postgres 二进制依赖老版 libicu。
 
 `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build`。浏览器测试 `pnpm e2e`，第一次先 `pnpm --filter e2e exec playwright install chromium`。测试默认自起内嵌 Postgres，也可以用 `HARTH_TEST_DATABASE_URL` 指定一个空库。
+
+## 做一个工具
+
+工具是跑在圈子页里的一个网页，通过 SDK 读写这个圈的数据；圈主装了它，成员就能用。
+
+```bash
+harth login --api https://你的火塘地址
+harth init my-tool && cd my-tool
+harth dev        # 在你的圈里实时预览
+harth publish    # 上传，审核通过后上架
+```
+
+清单、权限、SDK 接口见 [packages/cli/README.md](packages/cli/README.md)。CLI 发布到 npm 前，先在仓库里 `pnpm --filter harth build`，用 `node packages/cli/dist/cli.js` 代替 `harth`。
 
 ## 一起围坐
 

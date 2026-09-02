@@ -1,0 +1,27 @@
+{
+  "name": "@harth/sdk",
+  "version": "0.1.0",
+  "description": "火塘工具 SDK：在圈子页的 iframe 里拿到上下文，读写按圈隔离的数据",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --target=es2020 --outfile=dist/index.js && esbuild src/global.ts --bundle --format=iife --target=es2020 --minify --outfile=dist/sdk.js && tsc --emitDeclarationOnly",
+    "dev": "esbuild src/global.ts --bundle --format=iife --target=es2020 --outfile=dist/sdk.js --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

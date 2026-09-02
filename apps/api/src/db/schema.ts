@@ -142,6 +142,7 @@ export const posts = pgTable(
       .notNull()
       .default('open'),
     matchedResponseId: text('matched_response_id'),
+    toolId: text('tool_id'),
     authorConfirmedAt: timestamp('author_confirmed_at', { withTimezone: true }),
     responderConfirmedAt: timestamp('responder_confirmed_at', {
       withTimezone: true,
@@ -207,3 +208,86 @@ export const comments = pgTable(
   },
   (t) => [index('comment_post_created_idx').on(t.postId, t.createdAt)],
 )
+
+export const tools = pgTable('tool', {
+  id: id(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  ownerId: text('owner_id')
+    .notNull()
+    .references(() => user.id),
+  currentVersionId: text('current_version_id'),
+  createdAt: createdAt(),
+})
+
+// 状态：pending（待审）、approved、rejected；review 存自动检查与 AI 审核结果
+export const toolVersions = pgTable(
+  'tool_version',
+  {
+    id: id(),
+    toolId: text('tool_id')
+      .notNull()
+      .references(() => tools.id),
+    version: text('version').notNull(),
+    manifest: jsonb('manifest').notNull().$type<Record<string, unknown>>(),
+    status: text('status', { enum: ['pending', 'approved', 'rejected'] })
+      .notNull()
+      .default('pending'),
+    review: jsonb('review').$type<Record<string, unknown>>(),
+    createdAt: createdAt(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  },
+  (t) => [uniqueIndex('tool_version_tool_version_uidx').on(t.toolId, t.version)],
+)
+
+export const circleTools = pgTable(
+  'circle_tool',
+  {
+    circleId: text('circle_id')
+      .notNull()
+      .references(() => circles.id),
+    toolId: text('tool_id')
+      .notNull()
+      .references(() => tools.id),
+    installedBy: text('installed_by')
+      .notNull()
+      .references(() => user.id),
+    scopes: text('scopes').array().notNull(),
+    requests: integer('requests').notNull().default(0),
+    installedAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.circleId, t.toolId] })],
+)
+
+// 工具数据按 工具 × 圈 隔离；version 用于乐观并发
+export const toolStorage = pgTable(
+  'tool_storage',
+  {
+    toolId: text('tool_id')
+      .notNull()
+      .references(() => tools.id),
+    circleId: text('circle_id')
+      .notNull()
+      .references(() => circles.id),
+    key: text('key').notNull(),
+    value: jsonb('value').notNull().$type<unknown>(),
+    version: integer('version').notNull().default(1),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.toolId, t.circleId, t.key] })],
+)
+
+export const toolDevSessions = pgTable('tool_dev_session', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id),
+  circleId: text('circle_id')
+    .notNull()
+    .references(() => circles.id),
+  toolId: text('tool_id')
+    .notNull()
+    .references(() => tools.id),
+  url: text('url').notNull(),
+  manifest: jsonb('manifest').notNull().$type<Record<string, unknown>>(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+})

@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config'
-import { databaseUrl, TEST_DB } from './test/test-db'
+import { databaseUrl, TEST_DB, TEST_TOOLS_DIR } from './test/test-db'
 
 export default defineConfig({
   test: {
@@ -13,6 +13,8 @@ export default defineConfig({
       WEB_URL: 'http://localhost:3000',
       HARTH_TEST_HOOKS: '1',
       HARTH_JOBS: '0',
+      HARTH_ADMIN_EMAILS: 'admin@test.dev',
+      HARTH_TOOLS_DIR: TEST_TOOLS_DIR,
     },
   },
 })

@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { signIn, signUp } from '@/lib/auth-client'
 
-export function AuthForms() {
+export function AuthForms({ next = '/' }: { next?: string }) {
   const router = useRouter()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -24,7 +24,7 @@ export function AuthForms() {
       setBusy(false)
       return
     }
-    router.replace('/')
+    router.replace(next)
   }
 
   return (

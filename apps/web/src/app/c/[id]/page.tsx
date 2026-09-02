@@ -202,6 +202,9 @@ function CirclePage() {
                   子圈
                 </TabsTrigger>
               )}
+              <TabsTrigger value="tools" className="flex-none px-0.5 text-[15px]">
+                工具
+              </TabsTrigger>
               <TabsTrigger value="members" className="flex-none px-0.5 text-[15px]">
                 成员
               </TabsTrigger>
@@ -230,6 +233,11 @@ function CirclePage() {
             <TabsContent value="children">
               <Panel padded={false}>
                 <ChildrenTab circleId={circle.id} />
+              </Panel>
+            </TabsContent>
+            <TabsContent value="tools">
+              <Panel padded={false}>
+                <ToolsTab circle={circle} />
               </Panel>
             </TabsContent>
             <TabsContent value="members">
@@ -561,6 +569,107 @@ interface Member {
   name: string
   role: string
   joinedAt: string
+}
+
+interface InstalledTool {
+  slug: string
+  name: string
+  description: string
+  installedBy: string
+  installedAt: string
+}
+
+function ToolsTab({ circle }: { circle: CircleDetail }) {
+  const [tools, setTools] = useState<InstalledTool[] | null>(null)
+  const [dev, setDev] = useState<{ slug: string; name: string } | null>(null)
+  const [error, setError] = useState('')
+  const isOwner = circle.myRole === 'owner'
+
+  const load = useCallback(async () => {
+    const res = await api.circles[':id'].tools.$get({ param: { id: circle.id } })
+    if (!res.ok) {
+      setError(await errorText(res))
+      return
+    }
+    const data = await res.json()
+    setTools(data.tools as InstalledTool[])
+    setDev(data.dev)
+  }, [circle.id])
+
+  useLoad(load)
+
+  async function uninstall(tool: InstalledTool) {
+    if (!window.confirm(`卸载「${tool.name}」？它在这个圈里保存的数据会一起清空。`)) return
+    const res = await api.circles[':id'].tools[':slug'].$delete({
+      param: { id: circle.id, slug: tool.slug },
+    })
+    if (!res.ok) setError(await errorText(res))
+    else void load()
+  }
+
+  if (tools === null && !error) {
+    return <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>
+  }
+
+  return (
+    <>
+      {error && <p className="px-4 py-3 text-sm text-destructive">{error}</p>}
+      {dev && (
+        <Link
+          href={`/c/${circle.id}/t/${dev.slug}`}
+          className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 hover:bg-amber-100/60 dark:bg-amber-950/30"
+        >
+          <Avatar seed={`tool:${dev.slug}`} size={36} className="rounded-lg" />
+          <div className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-medium">{dev.name}</span>
+            <span className="text-xs text-muted-foreground">本地开发中，只有你能看到</span>
+          </div>
+        </Link>
+      )}
+      {tools && tools.length === 0 && !dev && (
+        <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
+          <p>这个圈还没装工具。</p>
+          {isOwner && (
+            <Link href="/tools" className="text-foreground underline">
+              去工具市场看看
+            </Link>
+          )}
+        </div>
+      )}
+      <ul>
+        {tools?.map((tool) => (
+          <li key={tool.slug} className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
+            <Link href={`/c/${circle.id}/t/${tool.slug}`}>
+              <Avatar seed={`tool:${tool.slug}`} size={36} className="rounded-lg" />
+            </Link>
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/c/${circle.id}/t/${tool.slug}`}
+                className="block truncate text-[15px] font-medium hover:underline"
+              >
+                {tool.name}
+              </Link>
+              <span className="block truncate text-xs text-muted-foreground">
+                {tool.description} · {tool.installedBy} 安装
+              </span>
+            </div>
+            {isOwner && circle.lifecycle.state !== 'archived' && (
+              <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => uninstall(tool)}>
+                卸载
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {tools && tools.length > 0 && isOwner && (
+        <div className="border-t px-4 py-2.5">
+          <Link href="/tools" className="text-xs text-muted-foreground hover:text-foreground">
+            去工具市场找更多
+          </Link>
+        </div>
+      )}
+    </>
+  )
 }
 
 function MemberList({ circleId, myId }: { circleId: string; myId: string }) {

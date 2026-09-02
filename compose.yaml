@@ -31,8 +31,15 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
       BETTER_AUTH_URL: ${SITE_URL:?}
       WEB_URL: ${SITE_URL}
+      HARTH_TOOL_ORIGIN: ${TOOLS_URL:?}
       HARTH_TOP_CIRCLE_ID: ${HARTH_TOP_CIRCLE_ID:-nuaa}
       HARTH_TOP_CIRCLE_NAME: ${HARTH_TOP_CIRCLE_NAME:-南京航空航天大学}
+      HARTH_ADMIN_EMAILS: ${HARTH_ADMIN_EMAILS:-}
+      HARTH_REVIEW_API_URL: ${HARTH_REVIEW_API_URL:-}
+      HARTH_REVIEW_API_KEY: ${HARTH_REVIEW_API_KEY:-}
+      HARTH_REVIEW_MODEL: ${HARTH_REVIEW_MODEL:-}
+    volumes:
+      - tool-data:/data/tools
     healthcheck:
       test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3001/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 10s
@@ -68,6 +75,7 @@ services:
       - '443:443'
     environment:
       SITE_URL: ${SITE_URL}
+      TOOLS_URL: ${TOOLS_URL}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -75,5 +83,6 @@ services:
 
 volumes:
   db-data:
+  tool-data:
   caddy-data:
   caddy-config:

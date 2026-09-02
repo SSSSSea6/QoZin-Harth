@@ -1,6 +1,6 @@
 'use client'
 
-import { Home, Plus, Users } from 'lucide-react'
+import { Blocks, Home, Plus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -18,6 +18,7 @@ interface NavCircle {
 const ITEMS = [
   { href: '/', label: '首页', icon: Home },
   { href: '/circles', label: '圈子', icon: Users },
+  { href: '/tools', label: '工具', icon: Blocks },
 ]
 
 export function LeftNav() {

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 const NAV = [
   { href: '/', label: '首页' },
   { href: '/circles', label: '圈子' },
+  { href: '/tools', label: '工具' },
 ]
 
 export function TopBar() {

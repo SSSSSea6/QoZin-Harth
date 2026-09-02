@@ -1,6 +1,6 @@
 'use client'
 
-import { Home, SquarePen, User, Users } from 'lucide-react'
+import { Blocks, Home, SquarePen, User, Users } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from '@/lib/auth-client'
@@ -15,12 +15,13 @@ export function BottomBar() {
     { href: '/', label: '首页', icon: Home },
     { href: '/circles', label: '圈子', icon: Users },
     { href: '/posts/new', label: '发帖', icon: SquarePen },
+    { href: '/tools', label: '工具', icon: Blocks },
     { href: `/u/${session.user.id}`, label: '我的', icon: User },
   ]
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background md:hidden">
-      <ul className="grid h-14 grid-cols-4">
+      <ul className="grid h-14 grid-cols-5">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href
           return (

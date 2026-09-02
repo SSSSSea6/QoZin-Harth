@@ -1,10 +1,17 @@
-{$SITE_URL}
-
-@api path /api/* /health
-handle @api {
-	reverse_proxy api:3001
+{$SITE_URL} {
+	@api path /api/* /health
+	handle @api {
+		reverse_proxy api:3001
+	}
+	handle {
+		reverse_proxy web:3000
+	}
 }
 
-handle {
-	reverse_proxy web:3000
+{$TOOLS_URL} {
+	@tool path /t/* /_harth/*
+	handle @tool {
+		reverse_proxy api:3001
+	}
+	respond 404
 }

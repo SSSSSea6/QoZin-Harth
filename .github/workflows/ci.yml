@@ -40,11 +40,11 @@ jobs:
 
       - run: pnpm lint
 
+      - run: pnpm build
+
       - run: pnpm test
         env:
           HARTH_TEST_DATABASE_URL: postgres://harth:harth_dev@localhost:5433/harth_test
-
-      - run: pnpm build
 
   e2e:
     runs-on: ubuntu-latest
@@ -78,6 +78,8 @@ jobs:
 
       - run: pnpm --filter e2e exec playwright install --with-deps chromium
 
+      - run: pnpm --filter @harth/sdk build
+
       - run: pnpm e2e
         env:
           HARTH_TEST_DATABASE_URL: postgres://harth:harth_dev@localhost:5434/harth_e2e
@@ -100,6 +102,7 @@ jobs:
             echo POSTGRES_PASSWORD=ci-postgres-password
             echo BETTER_AUTH_SECRET=ci-only-secret-0123456789abcdef0123456789abcdef
             echo SITE_URL=http://localhost
+            echo TOOLS_URL=http://tools.localhost
           } > .env
 
       - run: docker compose up -d --build --wait --wait-timeout 600
@@ -107,6 +110,7 @@ jobs:
       - run: |
           curl -fsS http://localhost/health
           curl -fsS http://localhost/ | grep -q 火塘
+          curl -fsS -H "Host: tools.localhost" http://localhost/_harth/sdk.js | grep -q harth
 
       - run: |
           curl -fsS -X POST http://localhost/api/auth/sign-up/email -H "Content-Type: application/json" -H "Origin: http://localhost" -d '{"name":"冒烟","email":"smoke@example.com","password":"smoke-password"}' | grep -q '"user"'

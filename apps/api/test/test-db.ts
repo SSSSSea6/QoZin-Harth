@@ -31,6 +31,9 @@ function embedded(tag: string, port: number): EmbeddedDb {
 export const TEST_DB = embedded('test', 5433)
 export const E2E_DB = embedded('e2e', 5434)
 
+export const TEST_TOOLS_DIR = join(HARTH_DIR, 'tools-test')
+export const E2E_TOOLS_DIR = join(HARTH_DIR, 'tools-e2e')
+
 export const USE_EXTERNAL_DB = Boolean(process.env.HARTH_TEST_DATABASE_URL)
 
 export function databaseUrl(db: EmbeddedDb): string {

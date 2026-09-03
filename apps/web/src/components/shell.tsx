@@ -16,9 +16,11 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1120px] flex-1 px-3 py-4 pb-20 md:grid md:grid-cols-[200px_minmax(0,1fr)] md:gap-4 md:pb-6">
+    <div className="flex flex-1">
       <LeftNav />
-      <main className="min-w-0">{children}</main>
+      <div className="min-w-0 flex-1 px-3 py-4 pb-20 md:px-6 md:pb-6">
+        <main className="mx-auto w-full max-w-[1200px]">{children}</main>
+      </div>
     </div>
   )
 }

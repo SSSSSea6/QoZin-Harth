@@ -126,7 +126,7 @@ export default function CirclesPage() {
                       </Badge>
                     )}
                     {circle.lifecycle.state === 'hibernating' && (
-                      <Badge className="rounded-sm border-transparent bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      <Badge className="rounded-sm border-transparent bg-amber-100 text-amber-800">
                         快熄了
                       </Badge>
                     )}

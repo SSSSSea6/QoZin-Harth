@@ -80,12 +80,14 @@ function Feed() {
   return (
     <Columns
       aside={
-        <>
-          {unjoinedTop.length > 0 && (
-            <JoinTopCard circles={unjoinedTop} onJoined={load} />
-          )}
-          {dying.length > 0 && <DyingCard circles={dying} onRenewed={load} />}
-        </>
+        unjoinedTop.length > 0 || dying.length > 0 ? (
+          <>
+            {unjoinedTop.length > 0 && (
+              <JoinTopCard circles={unjoinedTop} onJoined={load} />
+            )}
+            {dying.length > 0 && <DyingCard circles={dying} onRenewed={load} />}
+          </>
+        ) : undefined
       }
     >
       <Panel padded={false}>

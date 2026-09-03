@@ -37,16 +37,16 @@ export function LeftNav() {
   }, [pathname])
 
   return (
-    <nav className="sticky top-[72px] hidden self-start flex-col gap-4 md:flex">
+    <nav className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-[200px] shrink-0 flex-col gap-4 overflow-y-auto border-r bg-background px-3 py-4 md:flex lg:w-[240px]">
       <ul className="flex flex-col gap-0.5">
         {ITEMS.map(({ href, label, icon: Icon }) => (
           <li key={href}>
             <Link
               href={href}
               className={cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-2 text-[15px] hover:bg-background',
+                'flex items-center gap-2.5 rounded-md px-3 py-2 text-[15px] hover:bg-muted',
                 pathname === href
-                  ? 'bg-background font-medium'
+                  ? 'bg-muted font-medium'
                   : 'text-muted-foreground',
               )}
             >
@@ -65,7 +65,7 @@ export function LeftNav() {
           <Link
             href="/circles/new"
             aria-label="点一堆新火"
-            className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <Plus className="size-4" aria-hidden />
           </Link>
@@ -78,8 +78,8 @@ export function LeftNav() {
                 <Link
                   href={`/c/${circle.id}`}
                   className={cn(
-                    'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-background',
-                    active ? 'bg-background font-medium' : 'text-foreground/80',
+                    'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-muted',
+                    active ? 'bg-muted font-medium' : 'text-foreground/80',
                   )}
                 >
                   <Avatar seed={circle.id} size={20} className="rounded" />

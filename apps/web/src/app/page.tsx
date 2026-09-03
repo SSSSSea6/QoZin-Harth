@@ -26,7 +26,10 @@ function Landing() {
       <div className="flex flex-col items-center gap-3 text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="" width={64} height={64} className="size-16 rounded-2xl" />
-        <h1 className="text-2xl font-semibold">火塘</h1>
+        <h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/wordmark.svg" alt="火塘" className="h-9 w-auto" />
+        </h1>
         <p className="text-sm text-muted-foreground">
           拼车、二手、组队，从身边的圈子开始。
         </p>

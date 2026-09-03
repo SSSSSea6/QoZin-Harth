@@ -17,7 +17,7 @@ export function Columns({
     >
       <div className="flex min-w-0 flex-col gap-4">{children}</div>
       {aside && (
-        <aside className="sticky top-[72px] hidden self-start flex-col gap-4 xl:flex">
+        <aside className="sticky top-20 hidden self-start flex-col gap-4 xl:flex">
           {aside}
         </aside>
       )}

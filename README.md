@@ -1,8 +1,11 @@
 <div align="center">
 
-<img src="apps/web/public/logo.png" width="96" height="96" alt="火塘">
+<img src="apps/web/public/logo.png" width="112" height="112" alt="">
 
-# 火塘 · Harth
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/wordmark.svg">
+  <img src="apps/web/public/wordmark-black.svg" width="132" alt="火塘">
+</picture>
 
 **每个圈子都是一堆火：有人添柴就一直燃，没人添柴就安静熄灭。**
 

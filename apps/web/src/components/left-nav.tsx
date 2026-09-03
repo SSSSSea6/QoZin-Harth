@@ -37,7 +37,7 @@ export function LeftNav() {
   }, [pathname])
 
   return (
-    <nav className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-[200px] shrink-0 flex-col gap-4 overflow-y-auto border-r bg-background px-3 py-4 md:flex lg:w-[240px]">
+    <nav className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-[200px] shrink-0 flex-col gap-4 overflow-y-auto border-r bg-background px-3 py-4 md:flex lg:top-16 lg:h-[calc(100vh-4rem)] lg:w-[240px]">
       <ul className="flex flex-col gap-0.5">
         {ITEMS.map(({ href, label, icon: Icon }) => (
           <li key={href}>

@@ -13,12 +13,12 @@ export function TopBar() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background">
-      <div className="flex h-14 w-full items-center gap-6 px-3 md:px-6">
-        <Link href="/" className="flex items-center gap-2">
+      <div className="flex h-14 w-full items-center gap-6 px-3 md:px-6 lg:h-16">
+        <Link href="/" className="flex items-center gap-2 lg:gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="" width={28} height={28} className="size-7 rounded-md" />
+          <img src="/logo.png" alt="" width={36} height={36} className="size-7 rounded-md md:size-8 lg:size-9 lg:rounded-lg" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/wordmark.svg" alt="火塘" className="h-[18px] w-auto" />
+          <img src="/wordmark.svg" alt="火塘" className="h-[18px] w-auto md:h-[22px] lg:h-6" />
         </Link>
 
         <div className="ml-auto flex items-center gap-2">

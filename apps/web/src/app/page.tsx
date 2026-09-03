@@ -25,10 +25,10 @@ function Landing() {
     <div className="mx-auto flex max-w-sm flex-col gap-6 pt-10">
       <div className="flex flex-col items-center gap-3 text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="" width={64} height={64} className="size-16 rounded-2xl" />
+        <img src="/logo.png" alt="" width={96} height={96} className="size-20 rounded-2xl md:size-24 md:rounded-3xl" />
         <h1>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/wordmark.svg" alt="火塘" className="h-9 w-auto" />
+          <img src="/wordmark.svg" alt="火塘" className="h-10 w-auto md:h-12" />
         </h1>
         <p className="text-sm text-muted-foreground">
           拼车、二手、组队，从身边的圈子开始。

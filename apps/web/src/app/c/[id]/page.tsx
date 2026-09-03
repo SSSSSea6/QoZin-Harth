@@ -168,7 +168,7 @@ function CirclePage() {
           </div>
 
           {hibernating && (
-            <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+            <div className="border-t border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-300">
               好久没动静了，{daysUntil(circle.lifecycle.deadline!)}将安静熄灭。任何成员添一把柴就能续上。
             </div>
           )}
@@ -548,7 +548,7 @@ function ChildrenTab({ circleId }: { circleId: string }) {
                   </Badge>
                 )}
                 {child.lifecycle.state === 'hibernating' && (
-                  <Badge className="rounded-sm border-transparent bg-amber-100 text-amber-800">
+                  <Badge className="rounded-sm border-transparent bg-amber-500/15 text-amber-300">
                     快熄了
                   </Badge>
                 )}
@@ -617,7 +617,7 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
       {dev && (
         <Link
           href={`/c/${circle.id}/t/${dev.slug}`}
-          className="flex items-center gap-3 border-b bg-amber-50 px-4 py-3 hover:bg-amber-100/60"
+          className="flex items-center gap-3 border-b bg-amber-500/10 px-4 py-3 hover:bg-amber-500/15"
         >
           <Avatar seed={`tool:${dev.slug}`} size={36} className="rounded-lg" />
           <div className="min-w-0 flex-1">

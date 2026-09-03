@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { BottomBar } from "@/components/bottom-bar";
 import { Shell } from "@/components/shell";
 import { TopBar } from "@/components/top-bar";
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
+};
 
 export const metadata: Metadata = {
   title: "火塘",

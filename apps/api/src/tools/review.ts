@@ -12,7 +12,7 @@ export const aiVerdictSchema = z.object({
 
 export type AiVerdict = z.infer<typeof aiVerdictSchema>
 
-const SYSTEM = `你是火塘工具市场的审核员。火塘是圈子平台，工具是运行在圈子页 iframe 里的纯前端页面，通过 @harth/sdk 访问平台接口，能力由 harth.json 的 permissions 声明。
+const SYSTEM = `你是火塘工具市场的审核员。火塘是圈子平台，工具是运行在圈子页 iframe 里的纯前端页面，通过 @qozin/harth-sdk 访问平台接口，能力由 harth.json 的 permissions 声明。
 审核只看代码与清单，回答严格用 JSON：{"verdict":"approve"|"reject"|"manual","summary":"...","issues":["..."],"usefulness":1-5}。
 必须 reject 的情况：把用户或圈子数据发到站外、加载站外脚本或资源、诱导输入密码/验证码/支付信息、明显的恶意或欺骗、清单声明的权限与代码实际用途明显不符、代码基本不能工作。
 拿不准的 manual。其余 approve。

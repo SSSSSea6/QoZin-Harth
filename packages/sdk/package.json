@@ -1,5 +1,5 @@
 {
-  "name": "@harth/sdk",
+  "name": "@qozin/harth-sdk",
   "version": "0.1.0",
   "description": "火塘工具 SDK：在圈子页的 iframe 里拿到上下文，读写按圈隔离的数据",
   "license": "AGPL-3.0",

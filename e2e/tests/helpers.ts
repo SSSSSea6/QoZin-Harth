@@ -6,6 +6,7 @@ export const SCHOOL = '南京航空航天大学'
 export interface User {
   id: string
   name: string
+  email: string
 }
 
 let sequence = 0
@@ -27,7 +28,7 @@ export async function register(page: Page, name: string): Promise<User> {
   await form.getByRole('button', { name: '注册' }).click()
   await expect(page.getByRole('heading', { name: '首页' })).toBeVisible()
   const href = await page.locator('header a[href^="/u/"]').getAttribute('href')
-  return { id: href!.slice('/u/'.length), name }
+  return { id: href!.slice('/u/'.length), name, email }
 }
 
 export async function joinSchool(page: Page): Promise<void> {

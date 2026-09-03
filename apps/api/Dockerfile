@@ -29,9 +29,9 @@ COPY packages/sdk/package.json packages/sdk/
 COPY packages/cli/package.json packages/cli/
 COPY e2e/package.json e2e/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter @harth/sdk
+    pnpm install --frozen-lockfile --filter @qozin/harth-sdk
 COPY packages/sdk ./packages/sdk
-RUN pnpm --filter @harth/sdk build
+RUN pnpm --filter @qozin/harth-sdk build
 
 FROM base AS runner
 ENV NODE_ENV=production \

@@ -78,7 +78,7 @@ jobs:
 
       - run: pnpm --filter e2e exec playwright install --with-deps chromium
 
-      - run: pnpm --filter @harth/sdk build
+      - run: pnpm --filter @qozin/harth-sdk build
 
       - run: pnpm e2e
         env:

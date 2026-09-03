@@ -1,14 +1,38 @@
+import { zValidator } from '@hono/zod-validator'
 import { and, avg, count, desc, eq, or } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
+import { z } from 'zod'
+import { auth } from '../auth'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
 import { posts, responses, reviews } from '../db/schema'
+import { deleteAccount, exportAccount } from '../domain/account'
 import { requireAuth } from '../middleware/session'
 import type { AppEnv } from '../types'
 
 export const usersApp = new Hono<AppEnv>()
   .use(requireAuth)
+
+  .get('/me/export', async (c) => {
+    const data = await exportAccount(c.get('user')!.id)
+    const day = data.exportedAt.slice(0, 10)
+    return c.body(JSON.stringify(data, null, 2), 200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="harth-${day}.json"`,
+    })
+  })
+
+  .post('/me/delete', zValidator('json', z.object({ password: z.string().min(1) })), async (c) => {
+    const me = c.get('user')!
+    try {
+      await auth.api.signInEmail({ body: { email: me.email, password: c.req.valid('json').password } })
+    } catch {
+      throw new HTTPException(403, { message: '密码不对' })
+    }
+    await deleteAccount(me.id)
+    return c.json({ deleted: true })
+  })
 
   .get('/:id/profile', async (c) => {
     const id = c.req.param('id')

@@ -49,7 +49,7 @@ harth status                             # 看审核结果
 
 ## SDK
 
-页面里引入 `<script src="/_harth/sdk.js"></script>` 得到全局 `harth`；用打包器的话 `npm i @harth/sdk` 后 `import { harth } from '@harth/sdk'`。
+页面里引入 `<script src="/_harth/sdk.js"></script>` 得到全局 `harth`；用打包器的话 `npm i @qozin/harth-sdk` 后 `import { harth } from '@qozin/harth-sdk'`。
 
 ```js
 const ctx = await harth.connect()   // { user, circle, scopes, tool }

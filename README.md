@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="apps/web/public/logo.png" width="96" height="96" alt="火塘">
+
 # 火塘 · Harth
 
 **每个圈子都是一堆火：有人添柴就一直燃，没人添柴就安静熄灭。**

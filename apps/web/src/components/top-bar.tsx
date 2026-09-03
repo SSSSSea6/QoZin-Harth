@@ -1,6 +1,6 @@
 'use client'
 
-import { Flame, LogOut, SquarePen } from 'lucide-react'
+import { LogOut, SquarePen } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Avatar } from '@/components/avatar'
@@ -14,8 +14,9 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background">
       <div className="flex h-14 w-full items-center gap-6 px-3 md:px-6">
-        <Link href="/" className="flex items-center gap-1.5 text-[17px] font-semibold">
-          <Flame className="size-5 text-primary" aria-hidden />
+        <Link href="/" className="flex items-center gap-2 text-[17px] font-semibold">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" width={28} height={28} className="size-7 rounded-md" />
           火塘
         </Link>
 

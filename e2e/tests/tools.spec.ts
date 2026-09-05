@@ -1,46 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { strToU8, zipSync } from 'fflate'
-import { API_URL, WEB_URL } from '../playwright.config'
-import { createCircle, joinSchool, register, SCHOOL, uniqueName } from './helpers'
-
-const TOOL_HTML = `<!doctype html><meta charset="utf-8">
-<p id="who">连接中</p><button id="add">加一</button><p id="count"></p>
-<script src="/_harth/sdk.js"></script>
-<script>
-(async () => {
-  const ctx = await harth.connect()
-  document.getElementById('who').textContent = ctx.user.name + ' 在 ' + ctx.circle.name
-  const show = async () => {
-    const item = await harth.storage.get('count')
-    document.getElementById('count').textContent = '计数 ' + (item ? item.value : 0)
-  }
-  document.getElementById('add').onclick = async () => {
-    const item = await harth.storage.get('count')
-    await harth.storage.set('count', (item ? item.value : 0) + 1)
-    await show()
-  }
-  await show()
-})()
-</script>`
-
-function bundle(slug: string, name: string): Buffer {
-  const files = {
-    'harth.json': strToU8(
-      JSON.stringify({ slug, name, version: '1.0.0', description: '测试夹具', permissions: ['user.profile', 'storage'] }),
-    ),
-    'index.html': strToU8(TOOL_HTML),
-  }
-  return Buffer.from(zipSync(files))
-}
-
-// 管理员账号在 playwright.config 的 HARTH_ADMIN_EMAILS 里；重试时账号已存在，注册失败就直接登录
-async function adminSession(request: APIRequestContext): Promise<void> {
-  const account = { email: 'admin@e2e.test', password: 'e2e-password' }
-  const headers = { Origin: WEB_URL }
-  await request.post(`${API_URL}/api/auth/sign-up/email`, { headers, data: { name: '管理员', ...account } })
-  const signIn = await request.post(`${API_URL}/api/auth/sign-in/email`, { headers, data: account })
-  expect(signIn.ok(), await signIn.text()).toBeTruthy()
-}
+import { API_URL } from '../playwright.config'
+import { adminSession, counterBundle, createCircle, joinSchool, register, SCHOOL, uniqueName } from './helpers'
 
 test('工具：发布 → 审核 → 圈主安装 → 成员在圈内使用，数据按圈隔离', async ({ browser }) => {
   const devPage = await (await browser.newContext()).newPage()
@@ -59,7 +19,7 @@ test('工具：发布 → 审核 → 圈主安装 → 成员在圈内使用，�
   const slug = `fixture-${Math.random().toString(36).slice(2, 8)}`
   const published = await devPage.request.post(`${API_URL}/api/tools/publish`, {
     headers: { 'content-type': 'application/zip' },
-    data: bundle(slug, '计数器'),
+    data: counterBundle(slug, '计数器'),
   })
   expect(published.status()).toBe(201)
   const { version } = (await published.json()) as { version: { id: string; status: string } }

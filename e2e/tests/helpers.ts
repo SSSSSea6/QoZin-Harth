@@ -1,7 +1,48 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
-import { API_URL } from '../playwright.config'
+import { strToU8, zipSync } from 'fflate'
+import { API_URL, WEB_URL } from '../playwright.config'
 
 export const SCHOOL = '南京航空航天大学'
+
+// 管理员账号在 playwright.config 的 HARTH_ADMIN_EMAILS 里；重试时账号已存在，注册失败就直接登录
+export async function adminSession(request: APIRequestContext): Promise<void> {
+  const account = { email: 'admin@e2e.test', password: 'e2e-password' }
+  const headers = { Origin: WEB_URL }
+  await request.post(`${API_URL}/api/auth/sign-up/email`, { headers, data: { name: '管理员', ...account } })
+  const signIn = await request.post(`${API_URL}/api/auth/sign-in/email`, { headers, data: account })
+  expect(signIn.ok(), await signIn.text()).toBeTruthy()
+}
+
+const COUNTER_TOOL_HTML = `<!doctype html><meta charset="utf-8">
+<p id="who">连接中</p><button id="add">加一</button><p id="count"></p>
+<script src="/_harth/sdk.js"></script>
+<script>
+(async () => {
+  const ctx = await harth.connect()
+  document.getElementById('who').textContent = ctx.user.name + ' 在 ' + ctx.circle.name
+  const show = async () => {
+    const item = await harth.storage.get('count')
+    document.getElementById('count').textContent = '计数 ' + (item ? item.value : 0)
+  }
+  document.getElementById('add').onclick = async () => {
+    const item = await harth.storage.get('count')
+    await harth.storage.set('count', (item ? item.value : 0) + 1)
+    await show()
+  }
+  await show()
+})()
+</script>`
+
+// 测试夹具：一个用平台存储计数的工具包
+export function counterBundle(slug: string, name: string, version = '1.0.0'): Buffer {
+  const files = {
+    'harth.json': strToU8(
+      JSON.stringify({ slug, name, version, description: '测试夹具', permissions: ['user.profile', 'storage'] }),
+    ),
+    'index.html': strToU8(COUNTER_TOOL_HTML),
+  }
+  return Buffer.from(zipSync(files))
+}
 
 export interface User {
   id: string

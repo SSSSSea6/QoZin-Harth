@@ -208,3 +208,120 @@ describe('本地开发会话', () => {
     expect((await toolApi(token.body.token, '/storage/x')).status).toBe(403)
   })
 })
+
+interface ReviewItem {
+  id: string
+  version: string
+  status: string
+  review: { decidedBy?: string }
+  developer: { name: string }
+  permissions: string[]
+}
+
+async function marketVersion(): Promise<string | undefined> {
+  const market = await owner.json<{ tools: { slug: string; version: string }[] }>('/api/tools')
+  return market.body.tools.find((t) => t.slug === 'roll-call')?.version
+}
+
+describe('审核页接口', () => {
+  let pendingId = ''
+
+  it('队列只有管理员能看，待审与已处理分开', async () => {
+    const published = await publish(dev, pack({
+      'harth.json': JSON.stringify({ ...manifest, version: '1.0.2' }),
+      'index.html': '<!doctype html><script src="/_harth/sdk.js"></script><p>点名 v2</p>',
+    }))
+    expect(published.body.version.status).toBe('pending')
+    pendingId = published.body.version.id
+
+    expect((await dev.json('/api/tools/review')).status).toBe(403)
+    const { status, body } = await admin.json<{ pending: ReviewItem[]; recent: ReviewItem[] }>('/api/tools/review')
+    expect(status).toBe(200)
+    expect(body.pending.map((v) => v.version)).toEqual(['1.0.2'])
+    expect(body.pending[0]?.developer.name).toBe('开发者')
+    expect(body.pending[0]?.permissions).toEqual(manifest.permissions)
+    expect(body.recent.map((v) => [v.version, v.review.decidedBy])).toEqual([['1.0.1', 'admin'], ['1.0.0', 'checks']])
+  })
+
+  it('详情与文件：开发者和管理员能看，别人当不存在', async () => {
+    const detail = await admin.json<{ developer: { name: string }; manifest: { permissions: string[] }; isCurrent: boolean }>(
+      `/api/tools/versions/${pendingId}`,
+    )
+    expect(detail.status).toBe(200)
+    expect(detail.body.developer.name).toBe('开发者')
+    expect(detail.body.manifest.permissions).toEqual(manifest.permissions)
+    expect(detail.body.isCurrent).toBe(false)
+
+    const files = await admin.json<{ files: { name: string; size: number; text?: string }[]; truncated: boolean }>(
+      `/api/tools/versions/${pendingId}/files`,
+    )
+    expect(files.body.files.map((f) => f.name)).toEqual(['harth.json', 'index.html'])
+    expect(files.body.files[1]?.text).toContain('点名 v2')
+    expect(files.body.truncated).toBe(false)
+    expect((await dev.json(`/api/tools/versions/${pendingId}/files`)).status).toBe(200)
+    expect((await member.json(`/api/tools/versions/${pendingId}/files`)).status).toBe(404)
+  })
+
+  it('试运行：管理员在自己所在的圈里拿到令牌，未安装也能用；签名不对拿不到文件', async () => {
+    expect((await dev.post(`/api/tools/versions/${pendingId}/preview`, { circleId: 'nuaa' })).status).toBe(403)
+    expect((await admin.post(`/api/tools/versions/${pendingId}/preview`, { circleId: circleA })).status).toBe(403)
+
+    await admin.post('/api/circles/nuaa/join')
+    const grant = await admin.post<{ token: string; context: { entryUrl: string; scopes: string[] } }>(
+      `/api/tools/versions/${pendingId}/preview`,
+      { circleId: 'nuaa' },
+    )
+    expect(grant.status).toBe(200)
+    expect(grant.body.context.scopes).toEqual(manifest.permissions)
+    const entryPath = new URL(grant.body.context.entryUrl).pathname
+    expect(entryPath).toMatch(new RegExp(`^/review/${pendingId}/\\d+\\.[0-9a-f]{32}/$`))
+    const page = await app.request(entryPath)
+    expect(page.status).toBe(200)
+    expect(page.headers.get('content-security-policy')).toContain('frame-ancestors')
+    expect(await page.text()).toContain('点名 v2')
+    expect((await app.request(entryPath.replace(/[0-9a-f]{32}\/$/, `${'0'.repeat(32)}/`))).status).toBe(404)
+
+    const saved = await toolApi(grant.body.token, '/storage/preview', { method: 'PUT', body: JSON.stringify({ value: 1 }) })
+    expect(saved.status).toBe(200)
+    expect((await toolApi(grant.body.token, '/members')).status).toBe(200)
+  })
+
+  it('驳回要写原因，开发者能看到', async () => {
+    expect((await admin.post(`/api/tools/versions/${pendingId}/review`, { decision: 'reject' })).status).toBe(400)
+    const { status, body } = await admin.post<{ version: { status: string } }>(
+      `/api/tools/versions/${pendingId}/review`,
+      { decision: 'reject', note: '先把说明写清楚' },
+    )
+    expect(status).toBe(200)
+    expect(body.version.status).toBe('rejected')
+
+    const mine = await dev.json<{ tools: { slug: string; versions: { version: string; review: { admin?: { note?: string } } }[] }[] }>('/api/tools/mine')
+    const version = mine.body.tools.find((t) => t.slug === 'roll-call')?.versions.find((v) => v.version === '1.0.2')
+    expect(version?.review.admin?.note).toBe('先把说明写清楚')
+
+    const queue = await admin.json<{ pending: ReviewItem[]; recent: ReviewItem[] }>('/api/tools/review')
+    expect(queue.body.pending).toEqual([])
+    expect(queue.body.recent[0]?.version).toBe('1.0.2')
+  })
+
+  it('下架当前上架版本后退回更早的已通过版本，都没有就从市场消失；驳回的可以改判通过', async () => {
+    const published = await publish(dev, pack({
+      'harth.json': JSON.stringify({ ...manifest, version: '1.0.3' }),
+      'index.html': '<!doctype html><script src="/_harth/sdk.js"></script><p>点名 v3</p>',
+    }))
+    const v3 = published.body.version.id
+    await admin.post(`/api/tools/versions/${v3}/review`, { decision: 'approve' })
+    expect(await marketVersion()).toBe('1.0.3')
+
+    await admin.post(`/api/tools/versions/${v3}/review`, { decision: 'reject', note: '有问题，先下架' })
+    expect(await marketVersion()).toBe('1.0.1')
+
+    await admin.post(`/api/tools/versions/${versionId}/review`, { decision: 'reject', note: '一起下架' })
+    expect(await marketVersion()).toBeUndefined()
+    expect((await owner.post(`/api/circles/${circleB}/tools/roll-call`)).status).toBe(404)
+    expect((await app.request('/t/roll-call/')).status).toBe(404)
+
+    await admin.post(`/api/tools/versions/${v3}/review`, { decision: 'approve' })
+    expect(await marketVersion()).toBe('1.0.3')
+  })
+})

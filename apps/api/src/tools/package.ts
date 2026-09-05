@@ -27,6 +27,10 @@ const TEXT_EXTENSIONS = new Set(['html', 'htm', 'js', 'mjs', 'css', 'json', 'svg
 
 const MAX_FILES = 500
 
+export function isTextFile(name: string): boolean {
+  return TEXT_EXTENSIONS.has(name.split('.').pop()?.toLowerCase() ?? '')
+}
+
 export class PackageError extends Error {}
 
 export function openPackage(zip: Uint8Array): ToolPackage {
@@ -91,8 +95,7 @@ export function runChecks(pkg: ToolPackage, allowedOrigins: string[]): CheckResu
 
   const external = new Set<string>()
   for (const [name, data] of Object.entries(pkg.files)) {
-    const ext = name.split('.').pop()?.toLowerCase() ?? ''
-    if (!TEXT_EXTENSIONS.has(ext)) continue
+    if (!isTextFile(name)) continue
     const text = strFromU8(data)
     for (const match of text.matchAll(externalUrl)) {
       const url = match[0]
@@ -117,8 +120,7 @@ export function textFiles(pkg: ToolPackage, maxBytes: number): { name: string; t
   const out: { name: string; text: string }[] = []
   let used = 0
   for (const [name, data] of Object.entries(pkg.files)) {
-    const ext = name.split('.').pop()?.toLowerCase() ?? ''
-    if (!TEXT_EXTENSIONS.has(ext)) continue
+    if (!isTextFile(name)) continue
     const text = strFromU8(data)
     if (used + text.length > maxBytes) {
       out.push({ name, text: text.slice(0, Math.max(0, maxBytes - used)) })

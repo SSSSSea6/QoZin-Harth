@@ -4,6 +4,12 @@ export function formatPrice(priceFen: number): string {
   return `¥${Number.isInteger(yuan) ? yuan : yuan.toFixed(2)}`
 }
 
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 export function timeAgo(value: string | Date): string {
   const date = typeof value === 'string' ? new Date(value) : value
   const diff = Date.now() - date.getTime()

@@ -49,3 +49,7 @@ export const env = {
   TEST_HOOKS: process.env.HARTH_TEST_HOOKS === '1',
   JOBS: process.env.HARTH_JOBS !== '0',
 }
+
+export function isAdmin(user: { email: string }): boolean {
+  return env.ADMIN_EMAILS.includes(user.email.toLowerCase())
+}

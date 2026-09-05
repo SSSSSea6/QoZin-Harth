@@ -1,10 +1,12 @@
 import { and, eq } from 'drizzle-orm'
+import { strFromU8 } from 'fflate'
 import { HTTPException } from 'hono/http-exception'
 import type { ToolManifest } from '@harth/shared'
 import { db } from '../db'
 import { tools, toolVersions } from '../db/schema'
 import { env } from '../env'
 import {
+  isTextFile,
   openPackage,
   PackageError,
   runChecks,
@@ -28,10 +30,6 @@ export type ToolVersionRow = typeof toolVersions.$inferSelect
 
 export function allowedOrigins(): string[] {
   return [env.TOOL_ORIGIN, env.WEB_URL, env.BETTER_AUTH_URL]
-}
-
-export function isAdmin(user: { email: string }): boolean {
-  return env.ADMIN_EMAILS.includes(user.email.toLowerCase())
 }
 
 function compareVersions(a: string, b: string): number {
@@ -164,11 +162,52 @@ async function approveVersion(version: ToolVersionRow, review: ReviewRecord): Pr
   })
 }
 
+// 拒掉的是当前上架版本时，退回版本号最大的其他已通过版本，没有就下架
 async function rejectVersion(version: ToolVersionRow, review: ReviewRecord): Promise<void> {
-  await db
-    .update(toolVersions)
-    .set({ status: 'rejected', review, reviewedAt: new Date() })
-    .where(eq(toolVersions.id, version.id))
+  await db.transaction(async (tx) => {
+    await tx
+      .update(toolVersions)
+      .set({ status: 'rejected', review, reviewedAt: new Date() })
+      .where(eq(toolVersions.id, version.id))
+    const [tool] = await tx.select().from(tools).where(eq(tools.id, version.toolId)).limit(1)
+    if (!tool || tool.currentVersionId !== version.id) return
+    const approved = await tx
+      .select()
+      .from(toolVersions)
+      .where(and(eq(toolVersions.toolId, tool.id), eq(toolVersions.status, 'approved')))
+    const fallback = approved.sort((a, b) => compareVersions(b.version, a.version))[0]
+    await tx.update(tools).set({ currentVersionId: fallback?.id ?? null }).where(eq(tools.id, tool.id))
+  })
+}
+
+export interface PackageFileView {
+  name: string
+  size: number
+  text?: string
+}
+
+export async function listFiles(
+  version: ToolVersionRow,
+  maxTextBytes: number,
+): Promise<{ files: PackageFileView[]; truncated: boolean }> {
+  const all = await loadPackageFiles(version.toolId, version.id)
+  const files: PackageFileView[] = []
+  let used = 0
+  let truncated = false
+  for (const name of Object.keys(all).sort()) {
+    const data = all[name]!
+    const file: PackageFileView = { name, size: data.byteLength }
+    if (isTextFile(name)) {
+      if (used + data.byteLength <= maxTextBytes) {
+        file.text = strFromU8(data)
+        used += data.byteLength
+      } else {
+        truncated = true
+      }
+    }
+    files.push(file)
+  }
+  return { files, truncated }
 }
 
 export async function adminDecide(

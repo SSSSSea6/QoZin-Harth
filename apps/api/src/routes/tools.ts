@@ -1,13 +1,14 @@
 import { toolManifestSchema, toolSlugSchema, type ToolManifest } from '@harth/shared'
 import { zValidator } from '@hono/zod-validator'
-import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm'
+import { and, asc, desc, eq, isNotNull, isNull, ne } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { db } from '../db'
+import { user } from '../db/auth-schema'
 import { circles, circleTools, memberships, toolDevSessions, tools, toolVersions } from '../db/schema'
-import { getMembership } from '../domain/circles'
-import { env } from '../env'
+import { assertNotArchived, getMembership, mustGetCircle, mustGetMembership } from '../domain/circles'
+import { env, isAdmin } from '../env'
 import { requireAuth } from '../middleware/session'
 import { DEV_TOOL_SLUG } from './circle-tools'
 import {
@@ -16,14 +17,20 @@ import {
   ensureTool,
   getTool,
   getVersion,
-  isAdmin,
+  listFiles,
   publish,
   rereview,
+  type ToolRow,
   type ToolVersionRow,
 } from '../tools/service'
+import { issueToolToken, signPreviewPath } from '../tools/token'
 import type { AppEnv } from '../types'
 
 const DEV_SESSION_HOURS = 12
+const REVIEW_FILES_MAX_BYTES = 300 * 1024
+const RECENT_REVIEWS = 20
+
+type SessionUser = NonNullable<AppEnv['Variables']['user']>
 
 function versionView(v: ToolVersionRow) {
   return {
@@ -38,6 +45,42 @@ function versionView(v: ToolVersionRow) {
 
 function manifestOf(v: ToolVersionRow | null): ToolManifest | null {
   return (v?.manifest as ToolManifest | undefined) ?? null
+}
+
+function requireAdmin(me: SessionUser): void {
+  if (!isAdmin(me)) throw new HTTPException(403, { message: '只有管理员能审核' })
+}
+
+// 开发者看自己的，管理员看所有的，其他人当不存在
+async function accessibleVersion(
+  me: SessionUser,
+  id: string,
+): Promise<{ version: ToolVersionRow; tool: ToolRow }> {
+  const version = await getVersion(id)
+  const [tool] = version ? await db.select().from(tools).where(eq(tools.id, version.toolId)).limit(1) : []
+  if (!version || !tool || (tool.ownerId !== me.id && !isAdmin(me))) {
+    throw new HTTPException(404, { message: '版本不存在' })
+  }
+  return { version, tool }
+}
+
+function reviewItem({
+  version,
+  tool,
+  developer,
+}: {
+  version: ToolVersionRow
+  tool: ToolRow
+  developer: { id: string; name: string }
+}) {
+  const manifest = version.manifest as ToolManifest
+  return {
+    ...versionView(version),
+    tool: { slug: tool.slug, name: tool.name },
+    developer,
+    description: manifest.description,
+    permissions: manifest.permissions,
+  }
 }
 
 export const toolsApp = new Hono<AppEnv>()
@@ -89,6 +132,24 @@ export const toolsApp = new Hono<AppEnv>()
     return c.json({ tools: result })
   })
 
+  .get('/review', async (c) => {
+    requireAdmin(c.get('user')!)
+    const query = () =>
+      db
+        .select({ version: toolVersions, tool: tools, developer: { id: user.id, name: user.name } })
+        .from(toolVersions)
+        .innerJoin(tools, eq(toolVersions.toolId, tools.id))
+        .innerJoin(user, eq(tools.ownerId, user.id))
+    const pending = await query()
+      .where(eq(toolVersions.status, 'pending'))
+      .orderBy(asc(toolVersions.createdAt))
+    const recent = await query()
+      .where(ne(toolVersions.status, 'pending'))
+      .orderBy(desc(toolVersions.reviewedAt))
+      .limit(RECENT_REVIEWS)
+    return c.json({ pending: pending.map(reviewItem), recent: recent.map(reviewItem) })
+  })
+
   .post('/publish', async (c) => {
     const zip = new Uint8Array(await c.req.arrayBuffer())
     if (zip.byteLength === 0) throw new HTTPException(400, { message: '请求体为空' })
@@ -97,39 +158,79 @@ export const toolsApp = new Hono<AppEnv>()
   })
 
   .get('/versions/:id', async (c) => {
-    const user = c.get('user')!
-    const version = await getVersion(c.req.param('id'))
-    if (!version) throw new HTTPException(404, { message: '版本不存在' })
-    const [tool] = await db.select().from(tools).where(eq(tools.id, version.toolId)).limit(1)
-    if (!tool || (tool.ownerId !== user.id && !isAdmin(user))) {
-      throw new HTTPException(404, { message: '版本不存在' })
-    }
-    return c.json({ tool: { slug: tool.slug, name: tool.name }, version: versionView(version) })
+    const { version, tool } = await accessibleVersion(c.get('user')!, c.req.param('id'))
+    const [developer] = await db
+      .select({ id: user.id, name: user.name })
+      .from(user)
+      .where(eq(user.id, tool.ownerId))
+      .limit(1)
+    return c.json({
+      tool: { slug: tool.slug, name: tool.name },
+      version: versionView(version),
+      manifest: version.manifest as ToolManifest,
+      developer: developer!,
+      isCurrent: tool.currentVersionId === version.id,
+    })
+  })
+
+  .get('/versions/:id/files', async (c) => {
+    const { version } = await accessibleVersion(c.get('user')!, c.req.param('id'))
+    return c.json(await listFiles(version, REVIEW_FILES_MAX_BYTES))
+  })
+
+  .post('/versions/:id/preview', zValidator('json', z.object({ circleId: z.string() })), async (c) => {
+    const me = c.get('user')!
+    requireAdmin(me)
+    const { version, tool } = await accessibleVersion(me, c.req.param('id'))
+    const circle = await mustGetCircle(c.req.valid('json').circleId)
+    assertNotArchived(circle)
+    if (circle.isDm) throw new HTTPException(400, { message: '双人圈不能试运行工具' })
+    await mustGetMembership(circle.id, me.id)
+    const manifest = version.manifest as ToolManifest
+    const { token, expiresAt } = await issueToolToken({
+      sub: me.id,
+      cid: circle.id,
+      tid: tool.id,
+      scopes: manifest.permissions,
+      review: true,
+    })
+    const entryUrl = `${env.TOOL_ORIGIN}/review/${version.id}/${signPreviewPath(version.id)}/`
+    return c.json({
+      token,
+      expiresAt,
+      context: {
+        user: { id: me.id, name: me.name },
+        circle: { id: circle.id, name: circle.name },
+        tool: { slug: tool.slug, name: manifest.name, version: version.version },
+        scopes: manifest.permissions,
+        apiUrl: env.BETTER_AUTH_URL,
+        entryUrl,
+        origin: new URL(entryUrl).origin,
+      },
+    })
   })
 
   .post(
     '/versions/:id/review',
     zValidator(
       'json',
-      z.object({ decision: z.enum(['approve', 'reject']), note: z.string().max(500).optional() }),
+      z.object({
+        decision: z.enum(['approve', 'reject']),
+        note: z.string().trim().max(500).optional(),
+      }),
     ),
     async (c) => {
-      const user = c.get('user')!
-      if (!isAdmin(user)) throw new HTTPException(403, { message: '只有管理员能审核' })
+      const me = c.get('user')!
+      requireAdmin(me)
       const { decision, note } = c.req.valid('json')
-      const version = await adminDecide(user.id, c.req.param('id'), decision, note)
+      if (decision === 'reject' && !note) throw new HTTPException(400, { message: '驳回要写明原因' })
+      const version = await adminDecide(me.id, c.req.param('id'), decision, note || undefined)
       return c.json({ version: versionView(version) })
     },
   )
 
   .post('/versions/:id/rereview', async (c) => {
-    const user = c.get('user')!
-    const version = await getVersion(c.req.param('id'))
-    if (!version) throw new HTTPException(404, { message: '版本不存在' })
-    const [tool] = await db.select().from(tools).where(eq(tools.id, version.toolId)).limit(1)
-    if (!tool || (tool.ownerId !== user.id && !isAdmin(user))) {
-      throw new HTTPException(404, { message: '版本不存在' })
-    }
+    const { version } = await accessibleVersion(c.get('user')!, c.req.param('id'))
     await rereview(version)
     return c.json({ version: versionView((await getVersion(version.id))!) })
   })

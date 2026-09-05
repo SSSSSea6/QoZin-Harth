@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { ToolManifest } from '@harth/shared'
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { env } from '../env'
-import { currentVersion, getTool } from '../tools/service'
+import { currentVersion, getTool, getVersion } from '../tools/service'
 import { readPackageFile } from '../tools/store'
+import { verifyPreviewPath } from '../tools/token'
 
 const SDK_PATH = fileURLToPath(new URL('../../../../packages/sdk/dist/sdk.js', import.meta.url))
 
@@ -58,6 +59,26 @@ function csp(): string {
   ].join('; ')
 }
 
+async function servePackageFile(
+  c: Context,
+  toolId: string,
+  versionId: string,
+  manifest: ToolManifest,
+  prefix: string,
+): Promise<Response> {
+  let path = decodeURIComponent(c.req.path.slice(prefix.length))
+  if (path === '' || path.endsWith('/')) path += manifest.entry
+  const file = await readPackageFile(toolId, versionId, path)
+  if (!file) return c.text('文件不存在', 404)
+  const type = contentType(path)
+  return c.body(new Uint8Array(file), 200, {
+    'Content-Type': type,
+    'Content-Security-Policy': csp(),
+    'Cache-Control': type.startsWith('text/html') ? 'no-cache' : 'public, max-age=300',
+    'X-Content-Type-Options': 'nosniff',
+  })
+}
+
 export const toolStaticApp = new Hono()
   .get('/_harth/sdk.js', async (c) => {
     const file = await readFile(SDK_PATH)
@@ -73,16 +94,14 @@ export const toolStaticApp = new Hono()
     const tool = await getTool(slug)
     const version = tool ? await currentVersion(tool) : null
     if (!tool || !version) return c.text('工具不存在或还没上架', 404)
-    const manifest = version.manifest as ToolManifest
-    let path = decodeURIComponent(c.req.path.slice(`/t/${slug}/`.length))
-    if (path === '' || path.endsWith('/')) path += manifest.entry
-    const file = await readPackageFile(tool.id, version.id, path)
-    if (!file) return c.text('文件不存在', 404)
-    const type = contentType(path)
-    return c.body(new Uint8Array(file), 200, {
-      'Content-Type': type,
-      'Content-Security-Policy': csp(),
-      'Cache-Control': type.startsWith('text/html') ? 'no-cache' : 'public, max-age=300',
-      'X-Content-Type-Options': 'nosniff',
-    })
+    return servePackageFile(c, tool.id, version.id, version.manifest as ToolManifest, `/t/${slug}/`)
+  })
+
+  // 管理员试运行：签名在路径里，整包文件都在同一前缀下
+  .get('/review/:id/:sig/*', async (c) => {
+    const id = c.req.param('id')
+    const sig = c.req.param('sig')
+    const version = verifyPreviewPath(id, sig) ? await getVersion(id) : null
+    if (!version) return c.text('试运行链接不存在或已过期', 404)
+    return servePackageFile(c, version.toolId, version.id, version.manifest as ToolManifest, `/review/${id}/${sig}/`)
   })

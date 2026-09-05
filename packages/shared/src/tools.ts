@@ -20,7 +20,7 @@ export const TOOL_PACKAGE_MAX_BYTES = 5 * 1024 * 1024
 export const TOOL_STORAGE_VALUE_MAX_BYTES = 64 * 1024
 export const TOOL_STORAGE_MAX_KEYS = 1000
 
-const RESERVED_SLUGS = new Set(['mine', 'new', 'dev', 'api', 'admin', 'harth'])
+const RESERVED_SLUGS = new Set(['mine', 'new', 'dev', 'api', 'admin', 'harth', 'review'])
 
 export const toolSlugSchema = z
   .string()

@@ -1,11 +1,12 @@
 'use client'
 
-import { Blocks, Home, Plus, Users } from 'lucide-react'
+import { Blocks, ClipboardCheck, Home, Plus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/avatar'
 import { api } from '@/lib/api'
+import { useSession } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 interface NavCircle {
@@ -21,9 +22,13 @@ const ITEMS = [
   { href: '/tools', label: '工具', icon: Blocks },
 ]
 
+const ADMIN_ITEM = { href: '/tools/review', label: '审核', icon: ClipboardCheck }
+
 export function LeftNav() {
   const pathname = usePathname()
+  const { data: session } = useSession()
   const [circles, setCircles] = useState<NavCircle[]>([])
+  const items = session?.user.isAdmin ? [...ITEMS, ADMIN_ITEM] : ITEMS
 
   useEffect(() => {
     void api.circles.mine.$get().then(async (res) => {
@@ -39,7 +44,7 @@ export function LeftNav() {
   return (
     <nav className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-[200px] shrink-0 flex-col gap-4 overflow-y-auto border-r bg-background px-3 py-4 md:flex lg:top-16 lg:h-[calc(100vh-4rem)] lg:w-[240px]">
       <ul className="flex flex-col gap-0.5">
-        {ITEMS.map(({ href, label, icon: Icon }) => (
+        {items.map(({ href, label, icon: Icon }) => (
           <li key={href}>
             <Link
               href={href}

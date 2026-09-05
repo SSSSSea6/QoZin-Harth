@@ -59,7 +59,7 @@ const authenticate = createMiddleware<ToolEnv>(async (c, next) => {
     if (!rows[0] || rows[0].expiresAt < new Date()) {
       throw new HTTPException(403, { message: '本地开发会话已结束' })
     }
-  } else {
+  } else if (!payload.review) {
     const updated = await db
       .update(circleTools)
       .set({ requests: sql`${circleTools.requests} + 1` })

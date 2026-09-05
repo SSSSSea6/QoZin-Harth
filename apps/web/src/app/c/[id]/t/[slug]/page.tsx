@@ -3,31 +3,17 @@
 import { ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Panel } from '@/components/panel'
+import { ToolFrame, type ToolGrant } from '@/components/tool-frame'
 import { api, errorText } from '@/lib/api'
 import { useLoad, useRequireSession } from '@/lib/hooks'
-
-interface Grant {
-  token: string
-  expiresAt: number
-  context: {
-    user: { id: string; name: string }
-    circle: { id: string; name: string }
-    tool: { slug: string; name: string; version: string }
-    scopes: string[]
-    apiUrl: string
-    entryUrl: string
-    origin: string
-  }
-}
 
 export default function ToolHostPage() {
   const { session, pending } = useRequireSession()
   const { id, slug } = useParams<{ id: string; slug: string }>()
-  const [grant, setGrant] = useState<Grant | null>(null)
+  const [grant, setGrant] = useState<ToolGrant | null>(null)
   const [error, setError] = useState('')
-  const frame = useRef<HTMLIFrameElement>(null)
 
   const mint = useCallback(async () => {
     const res = await api.circles[':id'].tools[':slug'].token.$post({ param: { id, slug } })
@@ -35,7 +21,7 @@ export default function ToolHostPage() {
       setError(await errorText(res))
       return null
     }
-    const next = (await res.json()) as Grant
+    const next = (await res.json()) as ToolGrant
     setGrant(next)
     return next
   }, [id, slug])
@@ -46,25 +32,6 @@ export default function ToolHostPage() {
   }, [session, mint])
 
   useLoad(load)
-
-  useEffect(() => {
-    if (!grant) return
-    const origin = grant.context.origin
-    const handler = async (event: MessageEvent) => {
-      const target = frame.current?.contentWindow
-      if (!target || event.source !== target || event.origin !== origin) return
-      const kind = (event.data as { harth?: string } | null)?.harth
-      if (kind !== 'ready' && kind !== 'refresh') return
-      const fresh = kind === 'refresh' || Date.now() / 1000 > grant.expiresAt - 60 ? await mint() : grant
-      if (!fresh) return
-      target.postMessage(
-        { harth: 'context', context: fresh.context, token: fresh.token, expiresAt: fresh.expiresAt },
-        origin,
-      )
-    }
-    window.addEventListener('message', handler)
-    return () => window.removeEventListener('message', handler)
-  }, [grant, mint])
 
   if (pending || !session) return null
 
@@ -93,14 +60,7 @@ export default function ToolHostPage() {
       ) : (
         <Panel padded={false} className="overflow-hidden">
           {grant ? (
-            <iframe
-              ref={frame}
-              src={grant.context.entryUrl}
-              title={grant.context.tool.name}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
-              referrerPolicy="strict-origin"
-              className="block h-[calc(100vh-11rem)] min-h-[480px] w-full bg-background"
-            />
+            <ToolFrame grant={grant} mint={mint} className="h-[calc(100vh-11rem)] min-h-[480px]" />
           ) : (
             <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>
           )}

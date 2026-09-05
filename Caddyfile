@@ -9,7 +9,7 @@
 }
 
 {$TOOLS_URL} {
-	@tool path /t/* /_harth/*
+	@tool path /t/* /review/* /_harth/*
 	handle @tool {
 		reverse_proxy api:3001
 	}

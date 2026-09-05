@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { api, errorText } from '@/lib/api'
 import { timeAgo } from '@/lib/format'
 import { useLoad, useRequireSession } from '@/lib/hooks'
+import { VERSION_STATUS, type VersionStatus } from '@/lib/tool-status'
 
 interface Review {
   checks?: { name: string; ok: boolean; detail?: string }[]
@@ -19,7 +20,7 @@ interface Review {
 interface Version {
   id: string
   version: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: VersionStatus
   review: Review | null
   createdAt: string
 }
@@ -30,12 +31,6 @@ interface MyTool {
   currentVersionId: string | null
   versions: Version[]
 }
-
-const STATUS = {
-  pending: { label: '审核中', variant: 'outline' },
-  approved: { label: '已上架', variant: 'secondary' },
-  rejected: { label: '未通过', variant: 'outline' },
-} as const
 
 export default function MyToolsPage() {
   const { session, pending } = useRequireSession()
@@ -103,8 +98,8 @@ export default function MyToolsPage() {
                   <li key={v.id} className="rounded-md border px-3 py-2 text-sm">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-[13px]">v{v.version}</span>
-                      <Badge variant={STATUS[v.status].variant} className="rounded-sm">
-                        {STATUS[v.status].label}
+                      <Badge variant={VERSION_STATUS[v.status].variant} className="rounded-sm">
+                        {VERSION_STATUS[v.status].label}
                       </Badge>
                       <span className="ml-auto text-xs text-muted-foreground">{timeAgo(v.createdAt)}</span>
                     </div>

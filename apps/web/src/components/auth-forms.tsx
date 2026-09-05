@@ -39,7 +39,7 @@ export function AuthForms({ next = '/' }: { next?: string }) {
   }
 
   return (
-    <Tabs defaultValue="login">
+    <Tabs defaultValue="login" onValueChange={() => setError('')}>
       <TabsList className="w-full">
         <TabsTrigger value="login" className="flex-1">
           登录

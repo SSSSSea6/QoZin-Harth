@@ -12,6 +12,7 @@ export const RUN_LIMITS: RunLimits = {
   scriptMs: TOOL_RUN_LIMITS.scriptMs,
   hostCallMs: TOOL_RUN_LIMITS.hostCallMs,
   hostCalls: TOOL_RUN_LIMITS.hostCalls,
+  hostConcurrency: TOOL_RUN_LIMITS.hostConcurrency,
   hostBytes: TOOL_RUN_LIMITS.hostBytes,
   posts: TOOL_RUN_LIMITS.posts,
   logBytes: TOOL_RUN_LIMITS.logBytes,
@@ -102,6 +103,11 @@ class Slot {
     }
     this.current = null
     clearTimeout(current.timer)
+    if (message.dirty) {
+      const worker = this.worker
+      this.worker = null
+      void worker?.terminate()
+    }
     current.finish({
       ok: message.ok,
       result: message.result,

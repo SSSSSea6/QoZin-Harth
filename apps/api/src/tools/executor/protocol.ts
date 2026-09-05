@@ -14,6 +14,7 @@ export interface RunLimits {
   scriptMs: number
   hostCallMs: number
   hostCalls: number
+  hostConcurrency: number
   hostBytes: number
   posts: number
   logBytes: number
@@ -58,6 +59,7 @@ export interface BridgeCall {
   args: unknown[]
 }
 
+// dirty：runtime 没能干净释放（还有挂着的桥接调用），宿主应换一个 worker
 export interface RunDone {
   type: 'done'
   id: string
@@ -67,6 +69,7 @@ export interface RunDone {
   error?: string
   logs: string
   scriptMs: number
+  dirty?: boolean
 }
 
 export type WorkerToHost = BridgeCall | RunDone

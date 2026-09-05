@@ -29,7 +29,8 @@ COPY packages/sdk/package.json packages/sdk/
 COPY packages/cli/package.json packages/cli/
 COPY e2e/package.json e2e/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter @qozin/harth-sdk
+    pnpm install --frozen-lockfile --filter @qozin/harth-sdk...
+COPY packages/shared ./packages/shared
 COPY packages/sdk ./packages/sdk
 RUN pnpm --filter @qozin/harth-sdk build
 

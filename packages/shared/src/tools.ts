@@ -35,6 +35,7 @@ export const TOOL_RUN_LIMITS = {
   totalMs: 10_000,
   hostCallMs: 5_000,
   hostCalls: 100,
+  hostConcurrency: 4,
   hostBytes: 2 * 1024 * 1024,
   posts: 3,
   logBytes: 8 * 1024,

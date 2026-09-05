@@ -24,6 +24,13 @@ interface PendingCall {
   timer: ReturnType<typeof setTimeout>
 }
 
+interface QueuedCall {
+  op: string
+  args: unknown[]
+  resolve: (value: { status: number; body: unknown }) => void
+  reject: (error: Error) => void
+}
+
 const pendingCalls = new Map<number, PendingCall>()
 let nextCallId = 1
 
@@ -51,6 +58,10 @@ class Session {
   private fatal: RunFailure | null = null
   private failFast: (error: RunFailure) => void = () => {}
   private failed: Promise<never>
+  private openDeferreds = 0
+  private closed = false
+  private queue: QueuedCall[] = []
+  private inFlight = 0
 
   constructor(runtime: QuickJSRuntime, id: string, limits: RunLimits) {
     this.id = id
@@ -153,15 +164,16 @@ class Session {
     if (!this.fatal) {
       this.fatal = failure
       this.failFast(failure)
+      for (const item of this.queue.splice(0)) item.reject(failure)
     }
     return this.fatal
   }
 
+  // 同一时刻最多 hostConcurrency 个桥接调用在宿主那边跑，其余在这里排队；致命错误时排队的全部拒绝
   private bridge(op: string, args: unknown[]): Promise<{ status: number; body: unknown }> {
     if (this.fatal) return Promise.reject(this.fatal)
     this.hostCalls += 1
-    const argsJson = JSON.stringify(args)
-    this.hostBytes += byteLength(argsJson)
+    this.hostBytes += byteLength(JSON.stringify(args))
     if (op === 'posts.create') this.posts += 1
     if (this.hostCalls > this.limits.hostCalls) {
       this.abort(new RunFailure('BUDGET', `一次运行最多调用平台接口 ${this.limits.hostCalls} 次`))
@@ -172,29 +184,48 @@ class Session {
     }
     if (this.fatal) return Promise.reject(this.fatal)
     return new Promise((resolve, reject) => {
-      const callId = nextCallId++
-      const timer = setTimeout(() => {
-        pendingCalls.delete(callId)
-        reject(this.abort(new RunFailure('HOST_ERROR', '平台接口没有及时响应')))
-      }, this.limits.hostCallMs)
-      pendingCalls.set(callId, {
-        resolve: (value) => {
-          clearTimeout(timer)
-          this.hostBytes += byteLength(JSON.stringify(value.body ?? null))
-          if (this.hostBytes > this.limits.hostBytes) {
-            reject(this.abort(new RunFailure('BUDGET', `一次运行与平台交换的数据不能超过 ${this.limits.hostBytes / 1024 / 1024} MB`)))
-            return
-          }
-          resolve(value)
-        },
-        reject: (error) => {
-          clearTimeout(timer)
-          reject(error)
-        },
-        timer,
-      })
-      send({ type: 'bridge', id: this.id, callId, op: op as never, args })
+      this.queue.push({ op, args, resolve, reject })
+      this.drain()
     })
+  }
+
+  private drain(): void {
+    while (!this.fatal && this.inFlight < this.limits.hostConcurrency && this.queue.length > 0) {
+      this.dispatch(this.queue.shift()!)
+    }
+  }
+
+  private dispatch(item: QueuedCall): void {
+    this.inFlight += 1
+    const callId = nextCallId++
+    const settle = () => {
+      this.inFlight -= 1
+      this.drain()
+    }
+    const timer = setTimeout(() => {
+      pendingCalls.delete(callId)
+      settle()
+      item.reject(this.abort(new RunFailure('HOST_ERROR', '平台接口没有及时响应')))
+    }, this.limits.hostCallMs)
+    pendingCalls.set(callId, {
+      resolve: (value) => {
+        clearTimeout(timer)
+        settle()
+        this.hostBytes += byteLength(JSON.stringify(value.body ?? null))
+        if (this.hostBytes > this.limits.hostBytes) {
+          item.reject(this.abort(new RunFailure('BUDGET', `一次运行与平台交换的数据不能超过 ${this.limits.hostBytes / 1024 / 1024} MB`)))
+          return
+        }
+        item.resolve(value)
+      },
+      reject: (error) => {
+        clearTimeout(timer)
+        settle()
+        item.reject(error)
+      },
+      timer,
+    })
+    send({ type: 'bridge', id: this.id, callId, op: item.op as never, args: item.args })
   }
 
   private installHarth(context: RunRequest['context']): QuickJSHandle {
@@ -204,17 +235,22 @@ class Session {
         const op = vm.getString(opHandle)
         const args = (vm.dump(argsHandle) as unknown[]) ?? []
         const deferred = vm.newPromise()
+        this.openDeferreds += 1
         this.bridge(op, args).then(
           (value) => {
+            if (this.closed) return
             deferred.resolve(this.fromJson(value))
           },
           (error: unknown) => {
+            if (this.closed) return
             const message = error instanceof Error ? error.message : String(error)
             const errorHandle = this.keep(vm.unwrapResult(this.segment(() => vm.evalCode(`new Error(${JSON.stringify(message)})`))))
             deferred.reject(errorHandle)
           },
         )
         deferred.settled.then(() => {
+          this.openDeferreds -= 1
+          if (this.closed) return
           deferred.dispose()
           this.pump()
         })
@@ -293,23 +329,17 @@ class Session {
     return { logs: this.logs, scriptMs: Math.round(this.scriptMs) }
   }
 
-  dispose(): void {
+  // 还有挂着的桥接调用时 runtime 释放不干净（QuickJS 会断言 abort），这时只清理宿主侧并告诉宿主换 worker
+  dispose(): boolean {
+    this.closed = true
     for (const call of pendingCalls.values()) clearTimeout(call.timer)
     pendingCalls.clear()
-    for (const handle of this.owned.reverse()) {
-      try {
-        handle.dispose()
-      } catch {
-        // 已经随着 runtime 释放
-      }
-    }
+    if (this.fatal || this.openDeferreds > 0) return false
+    for (const handle of this.owned.reverse()) handle.dispose()
     this.owned = []
-    try {
-      this.vm.dispose()
-      this.runtime.dispose()
-    } catch {
-      // 释放失败只影响这个 runtime，worker 会被宿主回收
-    }
+    this.vm.dispose()
+    this.runtime.dispose()
+    return true
   }
 }
 
@@ -323,22 +353,17 @@ async function handleRun(req: RunRequest): Promise<void> {
   } catch (err) {
     const failure = err instanceof RunFailure ? err : new RunFailure('HOST_ERROR', err instanceof Error ? err.message : String(err))
     done = { type: 'done', id: req.id, ok: false, errorCode: failure.code, error: failure.message, ...session.output }
-  } finally {
-    session.dispose()
   }
+  done.dirty = !session.dispose()
   send(done)
 }
 
 async function handleValidate(req: ValidateRequest): Promise<void> {
   const QuickJS = await getQuickJS()
   const session = new Session(QuickJS.newRuntime(), req.id, req.limits)
-  let error: string | null
-  try {
-    error = session.validate(req)
-  } finally {
-    session.dispose()
-  }
-  send({ type: 'done', id: req.id, ok: error === null, error: error ?? undefined, logs: '', scriptMs: 0 })
+  const error = session.validate(req)
+  const dirty = !session.dispose()
+  send({ type: 'done', id: req.id, ok: error === null, error: error ?? undefined, logs: '', scriptMs: 0, dirty })
 }
 
 port.on('message', (message: HostToWorker) => {

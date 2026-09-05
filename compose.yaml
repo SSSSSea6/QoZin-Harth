@@ -23,6 +23,10 @@ services:
       args:
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
     depends_on:
       db:
         condition: service_healthy

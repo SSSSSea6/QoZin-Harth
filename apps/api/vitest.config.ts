@@ -13,7 +13,7 @@ export default defineConfig({
       WEB_URL: 'http://localhost:3000',
       HARTH_TEST_HOOKS: '1',
       HARTH_JOBS: '0',
-      HARTH_ADMIN_EMAILS: 'admin@test.dev',
+      HARTH_ADMIN_EMAILS: 'admin@test.dev,admin2@test.dev',
       HARTH_TOOLS_DIR: TEST_TOOLS_DIR,
     },
   },

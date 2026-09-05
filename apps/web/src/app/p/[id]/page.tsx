@@ -8,6 +8,7 @@ import { Columns } from '@/components/columns'
 import { Panel } from '@/components/panel'
 import { PostStatusBadge } from '@/components/post-status'
 import { StarInput } from '@/components/stars'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorText } from '@/lib/api'
@@ -24,7 +25,8 @@ interface PostDetail {
   fields: Record<string, unknown>
   status: 'open' | 'matched' | 'completed' | 'cancelled'
   createdAt: string
-  author: { id: string; name: string }
+  author: { id: string; name: string } | null
+  tool: { slug: string; name: string } | null
   isAuthor: boolean
   matchedResponderId: string | null
   iAmMatchedResponder: boolean
@@ -90,7 +92,7 @@ export default function PostPage() {
 
   return (
     <Columns
-      aside={<AuthorCard authorId={post.author.id} isSelf={post.isAuthor} />}
+      aside={post.author ? <AuthorCard authorId={post.author.id} isSelf={post.isAuthor} /> : undefined}
     >
       <Panel>
         <Link
@@ -104,15 +106,33 @@ export default function PostPage() {
           {isSecondhand && <PostStatusBadge status={post.status} />}
         </div>
         <div className="mt-3 flex items-center gap-2 text-[13px] text-muted-foreground">
-          <Link href={`/u/${post.author.id}`}>
-            <Avatar seed={post.author.id} size={28} />
-          </Link>
-          <Link
-            href={`/u/${post.author.id}`}
-            className="font-medium text-foreground hover:underline"
-          >
-            {post.author.name}
-          </Link>
+          {post.author ? (
+            <>
+              <Link href={`/u/${post.author.id}`}>
+                <Avatar seed={post.author.id} size={28} />
+              </Link>
+              <Link
+                href={`/u/${post.author.id}`}
+                className="font-medium text-foreground hover:underline"
+              >
+                {post.author.name}
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href={`/tools/${post.tool?.slug}`}>
+                <Avatar seed={`tool:${post.tool?.slug}`} size={28} className="rounded-md" />
+              </Link>
+              <Link href={`/tools/${post.tool?.slug}`} className="font-medium text-foreground hover:underline">
+                {post.tool?.name}
+              </Link>
+            </>
+          )}
+          {post.tool && (
+            <Badge variant="outline" className="rounded-sm">
+              {post.author ? `经 ${post.tool.name}` : '工具'}
+            </Badge>
+          )}
           <span aria-hidden>·</span>
           <time dateTime={post.createdAt}>{timeAgo(post.createdAt)}</time>
         </div>
@@ -453,7 +473,7 @@ function MatchedView({
   )
   const otherName = post.isAuthor
     ? (matched?.responderName ?? '对方')
-    : post.author.name
+    : (post.author?.name ?? '对方')
   const myConfirmed = post.isAuthor
     ? post.authorConfirmed
     : post.responderConfirmed
@@ -492,7 +512,7 @@ function MatchedView({
           onClick={async () => {
             const target = post.isAuthor
               ? post.matchedResponderId
-              : post.author.id
+              : (post.author?.id ?? null)
             if (!target) return
             const res = await api.circles.dm.$post({ json: { userId: target } })
             if (res.ok) {

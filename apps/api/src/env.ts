@@ -48,6 +48,7 @@ export const env = {
     : null,
   TEST_HOOKS: process.env.HARTH_TEST_HOOKS === '1',
   JOBS: process.env.HARTH_JOBS !== '0',
+  TOOL_RUNS: process.env.HARTH_TOOL_RUNS !== '0',
 }
 
 export function isAdmin(user: { email: string }): boolean {

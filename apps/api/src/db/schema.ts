@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm'
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -122,7 +124,8 @@ export const messages = pgTable(
   (t) => [index('message_circle_created_idx').on(t.circleId, t.createdAt)],
 )
 
-// 状态：open、matched（作者选定应答）、completed（双方确认）、cancelled
+// 状态：open、matched（作者选定应答）、completed（双方确认）、cancelled。
+// 工具定时运行发的帖没有作者，只有 toolId。
 export const posts = pgTable(
   'post',
   {
@@ -131,9 +134,7 @@ export const posts = pgTable(
       .notNull()
       .references(() => circles.id),
     templateKey: text('template_key').notNull(),
-    authorId: text('author_id')
-      .notNull()
-      .references(() => user.id),
+    authorId: text('author_id').references(() => user.id),
     title: text('title').notNull(),
     fields: jsonb('fields').notNull().$type<Record<string, unknown>>(),
     status: text('status', {
@@ -150,7 +151,10 @@ export const posts = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [index('post_circle_status_idx').on(t.circleId, t.status, t.createdAt)],
+  (t) => [
+    index('post_circle_status_idx').on(t.circleId, t.status, t.createdAt),
+    check('post_author_or_tool', sql`${t.authorId} IS NOT NULL OR ${t.toolId} IS NOT NULL`),
+  ],
 )
 
 export const responses = pgTable(
@@ -234,12 +238,14 @@ export const toolVersions = pgTable(
       .notNull()
       .default('pending'),
     review: jsonb('review').$type<Record<string, unknown>>(),
+    backendHash: text('backend_hash'),
     createdAt: createdAt(),
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   },
   (t) => [uniqueIndex('tool_version_tool_version_uidx').on(t.toolId, t.version)],
 )
 
+// versionId 与 schedules 是圈主确认过的版本与时间表快照，新版本有变化时要重新确认
 export const circleTools = pgTable(
   'circle_tool',
   {
@@ -253,13 +259,15 @@ export const circleTools = pgTable(
       .notNull()
       .references(() => user.id),
     scopes: text('scopes').array().notNull(),
+    versionId: text('version_id'),
+    schedules: jsonb('schedules').notNull().$type<Record<string, unknown>[]>().default([]),
     requests: integer('requests').notNull().default(0),
     installedAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.circleId, t.toolId] })],
 )
 
-// 工具数据按 工具 × 圈 隔离；version 用于乐观并发
+// 工具数据按 工具 × 圈 隔离；namespace 正式为空串、开发会话为 dev:<userId>；version 用于乐观并发
 export const toolStorage = pgTable(
   'tool_storage',
   {
@@ -269,12 +277,13 @@ export const toolStorage = pgTable(
     circleId: text('circle_id')
       .notNull()
       .references(() => circles.id),
+    namespace: text('namespace').notNull().default(''),
     key: text('key').notNull(),
     value: jsonb('value').notNull().$type<unknown>(),
     version: integer('version').notNull().default(1),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [primaryKey({ columns: [t.toolId, t.circleId, t.key] })],
+  (t) => [primaryKey({ columns: [t.toolId, t.circleId, t.namespace, t.key] })],
 )
 
 export const toolDevSessions = pgTable('tool_dev_session', {
@@ -289,5 +298,70 @@ export const toolDevSessions = pgTable('tool_dev_session', {
     .references(() => tools.id),
   url: text('url').notNull(),
   manifest: jsonb('manifest').notNull().$type<Record<string, unknown>>(),
+  backend: text('backend'),
+  backendHash: text('backend_hash'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 })
+
+// 每个安装 × 清单里的一条时间表；nextRunAt 从计划时间推进，不从完成时间算
+export const toolSchedules = pgTable(
+  'tool_schedule',
+  {
+    id: id(),
+    circleId: text('circle_id')
+      .notNull()
+      .references(() => circles.id),
+    toolId: text('tool_id')
+      .notNull()
+      .references(() => tools.id),
+    name: text('name').notNull(),
+    cron: text('cron').notNull(),
+    action: text('action').notNull(),
+    input: jsonb('input').$type<Record<string, unknown>>(),
+    nextRunAt: timestamp('next_run_at', { withTimezone: true }).notNull(),
+    lastScheduledFor: timestamp('last_scheduled_for', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('tool_schedule_install_name_uidx').on(t.circleId, t.toolId, t.name),
+    index('tool_schedule_due_idx').on(t.nextRunAt),
+  ],
+)
+
+export const toolRuns = pgTable(
+  'tool_run',
+  {
+    id: id(),
+    toolId: text('tool_id')
+      .notNull()
+      .references(() => tools.id),
+    circleId: text('circle_id')
+      .notNull()
+      .references(() => circles.id),
+    versionId: text('version_id'),
+    scheduleId: text('schedule_id'),
+    environment: text('environment', { enum: ['prod', 'dev'] }).notNull(),
+    trigger: text('trigger', { enum: ['call', 'schedule', 'manual'] }).notNull(),
+    action: text('action').notNull(),
+    input: jsonb('input').$type<unknown>(),
+    userId: text('user_id').references(() => user.id),
+    scheduledFor: timestamp('scheduled_for', { withTimezone: true }),
+    status: text('status', {
+      enum: ['queued', 'running', 'ok', 'error', 'timeout', 'skipped', 'interrupted'],
+    })
+      .notNull()
+      .default('queued'),
+    errorCode: text('error_code'),
+    error: text('error'),
+    logs: text('logs'),
+    result: jsonb('result').$type<unknown>(),
+    createdAt: createdAt(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    durationMs: integer('duration_ms'),
+  },
+  (t) => [
+    index('tool_run_install_created_idx').on(t.toolId, t.circleId, t.createdAt),
+    index('tool_run_status_idx').on(t.status, t.createdAt),
+    uniqueIndex('tool_run_occurrence_uidx').on(t.scheduleId, t.scheduledFor),
+  ],
+)

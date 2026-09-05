@@ -1,6 +1,6 @@
 'use client'
 
-import { TOOL_SCOPES, type ToolScope } from '@harth/shared'
+import { describeCron, TOOL_SCOPES, type ToolScope } from '@harth/shared'
 import { ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
@@ -46,8 +46,10 @@ interface Detail {
   manifest: {
     description: string
     entry: string
+    backend?: string
     permissions: ToolScope[]
-    actions: { name: string; description: string }[]
+    actions: { name: string; description: string; triggers: ('call' | 'schedule')[] }[]
+    schedules: { name: string; cron: string; action: string }[]
   }
   developer: { id: string; name: string }
   isCurrent: boolean
@@ -165,6 +167,12 @@ export default function ReviewDetailPage() {
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
           <dt className="text-muted-foreground">入口</dt>
           <dd className="font-mono text-[13px]">{manifest.entry}</dd>
+          {manifest.backend && (
+            <>
+              <dt className="text-muted-foreground">后端</dt>
+              <dd className="font-mono text-[13px]">{manifest.backend}</dd>
+            </>
+          )}
           <dt className="text-muted-foreground">权限</dt>
           <dd>
             {manifest.permissions.length === 0 ? (
@@ -188,6 +196,24 @@ export default function ReviewDetailPage() {
                   {manifest.actions.map((action) => (
                     <li key={action.name}>
                       <span className="font-mono text-[13px]">{action.name}</span> {action.description}
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        {action.triggers.map((t) => (t === 'call' ? '前端调用' : '定时')).join('、')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </>
+          )}
+          {manifest.schedules.length > 0 && (
+            <>
+              <dt className="text-muted-foreground">时间表</dt>
+              <dd>
+                <ul className="flex flex-col gap-0.5">
+                  {manifest.schedules.map((schedule) => (
+                    <li key={schedule.name}>
+                      {describeCron(schedule.cron) ?? '自定义'} 运行 <span className="font-mono text-[13px]">{schedule.action}</span>
+                      <span className="ml-1.5 font-mono text-xs text-muted-foreground">{schedule.cron}</span>
                     </li>
                   ))}
                 </ul>

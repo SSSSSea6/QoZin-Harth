@@ -1,5 +1,6 @@
 import { strFromU8, unzipSync } from 'fflate'
 import {
+  TOOL_BACKEND_MAX_BYTES,
   TOOL_MANIFEST_FILE,
   TOOL_PACKAGE_MAX_BYTES,
   toolManifestSchema,
@@ -113,15 +114,66 @@ export function runChecks(pkg: ToolPackage, allowedOrigins: string[]): CheckResu
     detail: external.size ? `引用了站外地址：${[...external].slice(0, 5).join('、')}` : undefined,
   })
 
+  if (pkg.manifest.backend) {
+    const backend = pkg.files[pkg.manifest.backend]
+    results.push({
+      name: '后端文件',
+      ok: backend !== undefined && backend.byteLength <= TOOL_BACKEND_MAX_BYTES,
+      detail: !backend
+        ? `清单里的 backend 文件不存在：${pkg.manifest.backend}`
+        : backend.byteLength > TOOL_BACKEND_MAX_BYTES
+          ? `后端文件超过 ${TOOL_BACKEND_MAX_BYTES / 1024} KB`
+          : undefined,
+    })
+  }
+
+  const secrets = findSecrets(pkg)
+  results.push({
+    name: '凭据',
+    ok: secrets.length === 0,
+    detail: secrets.length ? `疑似把密钥打进了包里：${secrets.slice(0, 3).join('、')}` : undefined,
+  })
+
   return results
+}
+
+const SECRET_PATTERNS: [string, RegExp][] = [
+  ['私钥', /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/],
+  ['OpenAI 风格密钥', /\bsk-[A-Za-z0-9_-]{20,}\b/],
+  ['AWS 访问密钥', /\bAKIA[0-9A-Z]{16}\b/],
+  ['GitHub 令牌', /\bgh[pousr]_[A-Za-z0-9]{30,}\b/],
+  ['Slack 令牌', /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/],
+]
+
+function findSecrets(pkg: ToolPackage): string[] {
+  const found = new Set<string>()
+  for (const [name, data] of Object.entries(pkg.files)) {
+    if (!isTextFile(name)) continue
+    const text = strFromU8(data)
+    for (const [label, pattern] of SECRET_PATTERNS) {
+      if (pattern.test(text)) found.add(`${name}（${label}）`)
+    }
+  }
+  return [...found]
+}
+
+// 清单、后端、入口页先进审核预算，其余按名字排
+function reviewOrder(pkg: ToolPackage): string[] {
+  const first = [TOOL_MANIFEST_FILE, pkg.manifest.backend, pkg.manifest.entry].filter(
+    (name): name is string => name !== undefined && name in pkg.files,
+  )
+  const rest = Object.keys(pkg.files)
+    .filter((name) => !first.includes(name))
+    .sort()
+  return [...new Set([...first, ...rest])]
 }
 
 export function textFiles(pkg: ToolPackage, maxBytes: number): { name: string; text: string }[] {
   const out: { name: string; text: string }[] = []
   let used = 0
-  for (const [name, data] of Object.entries(pkg.files)) {
+  for (const name of reviewOrder(pkg)) {
     if (!isTextFile(name)) continue
-    const text = strFromU8(data)
+    const text = strFromU8(pkg.files[name]!)
     if (used + text.length > maxBytes) {
       out.push({ name, text: text.slice(0, Math.max(0, maxBytes - used)) })
       break

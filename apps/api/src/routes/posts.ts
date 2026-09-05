@@ -22,6 +22,7 @@ import {
   posts,
   responses,
   reviews,
+  tools,
 } from '../db/schema'
 import {
   assertNotArchived,
@@ -37,6 +38,7 @@ type PostRow = typeof posts.$inferSelect
 const commentCount = sql<number>`(select count(*) from ${comments} where ${comments.postId} = ${posts.id})`.mapWith(Number)
 const responseCount = sql<number>`(select count(*) from ${responses} where ${responses.postId} = ${posts.id})`.mapWith(Number)
 
+// 定时运行发的帖没有作者，列表用工具名显示
 const listColumns = {
   id: posts.id,
   circleId: posts.circleId,
@@ -46,8 +48,10 @@ const listColumns = {
   fields: posts.fields,
   status: posts.status,
   createdAt: posts.createdAt,
-  authorId: user.id,
+  authorId: posts.authorId,
   authorName: user.name,
+  toolSlug: tools.slug,
+  toolName: tools.name,
   commentCount,
   responseCount,
 }
@@ -99,7 +103,8 @@ export const postsApp = new Hono<AppEnv>()
           ),
         )
         .innerJoin(circles, eq(circles.id, posts.circleId))
-        .innerJoin(user, eq(posts.authorId, user.id))
+        .leftJoin(user, eq(posts.authorId, user.id))
+        .leftJoin(tools, eq(posts.toolId, tools.id))
         .where(anchor ? lt(posts.createdAt, anchor) : undefined)
         .orderBy(desc(posts.createdAt))
         .limit(30)
@@ -179,7 +184,8 @@ export const postsApp = new Hono<AppEnv>()
         .select(listColumns)
         .from(posts)
         .innerJoin(circles, eq(circles.id, posts.circleId))
-        .innerJoin(user, eq(posts.authorId, user.id))
+        .leftJoin(user, eq(posts.authorId, user.id))
+        .leftJoin(tools, eq(posts.toolId, tools.id))
         .where(and(...conditions))
         .orderBy(desc(posts.createdAt))
         .limit(30)
@@ -227,11 +233,12 @@ export const postsApp = new Hono<AppEnv>()
       .where(eq(comments.postId, post.id))
       .orderBy(comments.createdAt)
 
-    const [author] = await db
-      .select({ id: user.id, name: user.name })
-      .from(user)
-      .where(eq(user.id, post.authorId))
-      .limit(1)
+    const [author] = post.authorId
+      ? await db.select({ id: user.id, name: user.name }).from(user).where(eq(user.id, post.authorId)).limit(1)
+      : []
+    const [tool] = post.toolId
+      ? await db.select({ slug: tools.slug, name: tools.name }).from(tools).where(eq(tools.id, post.toolId)).limit(1)
+      : []
 
     const myReview = await db
       .select({ id: reviews.id })
@@ -250,7 +257,8 @@ export const postsApp = new Hono<AppEnv>()
         fields: post.fields,
         status: post.status,
         createdAt: post.createdAt,
-        author: author!,
+        author: author ?? null,
+        tool: tool ?? null,
         isAuthor,
         matchedResponseId: post.matchedResponseId,
         matchedResponderId: responderId,
@@ -396,7 +404,7 @@ export const postsApp = new Hono<AppEnv>()
     const responderId = await matchedResponderId(post)
     let revieweeId: string
     if (userId === post.authorId) revieweeId = responderId!
-    else if (userId === responderId) revieweeId = post.authorId
+    else if (userId === responderId && post.authorId) revieweeId = post.authorId
     else throw new HTTPException(403, { message: '只有交易双方能互评' })
 
     const { rating, comment } = c.req.valid('json')

@@ -15,8 +15,10 @@ export interface PostListItemData {
   fields: Record<string, unknown>
   status: 'open' | 'matched' | 'completed' | 'cancelled'
   createdAt: string
-  authorId: string
-  authorName: string
+  authorId: string | null
+  authorName: string | null
+  toolSlug?: string | null
+  toolName?: string | null
   commentCount: number
   responseCount: number
 }
@@ -45,17 +47,34 @@ export function PostList({
         const isSecondhand = key === 'secondhand'
         return (
           <li key={post.id} className="flex gap-3 border-b px-4 py-4 last:border-b-0">
-            <Link href={`/u/${post.authorId}`} className="mt-0.5">
-              <Avatar seed={post.authorId} size={36} />
-            </Link>
+            {post.authorId ? (
+              <Link href={`/u/${post.authorId}`} className="mt-0.5">
+                <Avatar seed={post.authorId} size={36} />
+              </Link>
+            ) : (
+              <Link href={`/tools/${post.toolSlug}`} className="mt-0.5">
+                <Avatar seed={`tool:${post.toolSlug}`} size={36} className="rounded-lg" />
+              </Link>
+            )}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground">
-                <Link
-                  href={`/u/${post.authorId}`}
-                  className="font-medium text-foreground hover:underline"
-                >
-                  {post.authorName}
-                </Link>
+                {post.authorId ? (
+                  <Link
+                    href={`/u/${post.authorId}`}
+                    className="font-medium text-foreground hover:underline"
+                  >
+                    {post.authorName}
+                  </Link>
+                ) : (
+                  <Link href={`/tools/${post.toolSlug}`} className="font-medium text-foreground hover:underline">
+                    {post.toolName}
+                  </Link>
+                )}
+                {post.toolName && (
+                  <Badge variant="outline" className="rounded-sm">
+                    {post.authorId ? `经 ${post.toolName}` : '工具'}
+                  </Badge>
+                )}
                 {showCircle && (
                   <>
                     <span aria-hidden>·</span>

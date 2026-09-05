@@ -33,6 +33,53 @@ const COUNTER_TOOL_HTML = `<!doctype html><meta charset="utf-8">
 })()
 </script>`
 
+const BACKEND_TOOL_HTML = `<!doctype html><meta charset="utf-8">
+<p id="out">连接中</p>
+<script src="/_harth/sdk.js"></script>
+<script>
+(async () => {
+  await harth.connect()
+  const r = await harth.call('tally')
+  document.getElementById('out').textContent = '后端计数 ' + r.count
+})()
+</script>`
+
+const BACKEND_TOOL_SERVER = `export default {
+  async tally(harth) {
+    const item = await harth.storage.get('count')
+    const next = (item ? item.value : 0) + 1
+    await harth.storage.set('count', next)
+    return { count: next }
+  },
+  async remind(harth) {
+    await harth.posts.create({ title: '提醒：今天记得点名', body: '定时任务发的' })
+  },
+}`
+
+// 测试夹具：带后端与定时任务的工具包
+export function backendBundle(slug: string, name: string, version = '1.0.0', cron = '0 8 * * 1-5'): Buffer {
+  const files = {
+    'harth.json': strToU8(
+      JSON.stringify({
+        slug,
+        name,
+        version,
+        description: '带后端的测试夹具',
+        backend: 'server.js',
+        permissions: ['user.profile', 'storage', 'posts.write', 'schedule'],
+        actions: [
+          { name: 'tally', description: '计数', triggers: ['call'] },
+          { name: 'remind', description: '提醒', triggers: ['schedule'] },
+        ],
+        schedules: [{ name: 'morning', cron, action: 'remind' }],
+      }),
+    ),
+    'index.html': strToU8(BACKEND_TOOL_HTML),
+    'server.js': strToU8(BACKEND_TOOL_SERVER),
+  }
+  return Buffer.from(zipSync(files))
+}
+
 // 测试夹具：一个用平台存储计数的工具包
 export function counterBundle(slug: string, name: string, version = '1.0.0'): Buffer {
   const files = {

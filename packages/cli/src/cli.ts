@@ -157,6 +157,7 @@ const TEMPLATE_HTML = `<!doctype html>
   <p id="hello">连接中…</p>
   <button id="save">记一下</button>
   <p id="count"></p>
+  <p id="backend"></p>
   <script src="/_harth/sdk.js"></script>
   <script>
     (async () => {
@@ -165,6 +166,8 @@ const TEMPLATE_HTML = `<!doctype html>
       const show = async () => {
         const item = await harth.storage.get('count')
         document.getElementById('count').textContent = '这个圈里一共记了 ' + (item ? item.value : 0) + ' 次'
+        const stat = await harth.call('tally')
+        document.getElementById('backend').textContent = '后端也数了一遍：' + stat.count
       }
       document.getElementById('save').onclick = async () => {
         const item = await harth.storage.get('count')
@@ -177,6 +180,32 @@ const TEMPLATE_HTML = `<!doctype html>
 </body>
 </html>
 `
+
+// 后端在火塘的沙箱里跑：只能用参数里的 harth，没有网络、文件和 Node API；代码和前端一样公开，别放密钥
+const TEMPLATE_SERVER = `export default {
+  // 前端 harth.call('tally') 调它；定时运行时 harth.user 是 null
+  async tally(harth) {
+    const item = await harth.storage.get('count')
+    return { count: item ? item.value : 0, by: harth.user ? harth.user.name : '定时任务' }
+  },
+
+  // harth.json 里 schedules 声明的动作，每个工作日早上以工具身份发一帖
+  async remind(harth) {
+    const item = await harth.storage.get('count')
+    await harth.posts.create({ title: '记一下', body: '这个圈里一共记了 ' + (item ? item.value : 0) + ' 次' })
+  },
+}
+`
+
+const TEMPLATE_MANIFEST = {
+  backend: 'server.js',
+  permissions: ['user.profile', 'storage', 'posts.write', 'schedule'],
+  actions: [
+    { name: 'tally', description: '统计记了多少次', triggers: ['call'] },
+    { name: 'remind', description: '早上发一帖汇报次数', triggers: ['schedule'] },
+  ],
+  schedules: [{ name: 'morning', cron: '0 8 * * 1-5', action: 'remind' }],
+}
 
 async function init(
   target: string | undefined,
@@ -192,11 +221,12 @@ async function init(
     .slice(0, 32)
   const name = options.name ?? (await ask('工具名字', slug))
   const description = options.description ?? (await ask('一句话说明它做什么', name))
-  const manifest = toolManifestSchema.parse({ slug, name, version: '0.1.0', description })
+  const manifest = toolManifestSchema.parse({ slug, name, version: '0.1.0', description, ...TEMPLATE_MANIFEST })
   await mkdir(dir, { recursive: true })
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
   await writeFile(join(dir, manifest.entry), TEMPLATE_HTML.replace('__NAME__', name))
-  console.log(`已创建 ${relative(process.cwd(), dir) || '.'}/：${TOOL_MANIFEST_FILE}、${manifest.entry}`)
+  await writeFile(join(dir, manifest.backend!), TEMPLATE_SERVER)
+  console.log(`已创建 ${relative(process.cwd(), dir) || '.'}/：${TOOL_MANIFEST_FILE}、${manifest.entry}、${manifest.backend}`)
   console.log('下一步：harth dev')
 }
 
@@ -246,12 +276,20 @@ async function dev(options: { port: number; circle?: string }): Promise<void> {
   }
 
   const url = `http://localhost:${options.port}`
+  const readBackend = async (): Promise<string | undefined> => {
+    if (!manifest.backend) return undefined
+    const file = join(dir, manifest.backend)
+    if (!existsSync(file)) throw new CliError(`清单里的 backend 文件不存在：${manifest.backend}`)
+    return readFile(file, 'utf8')
+  }
   const register = async () => {
-    const res = await api<{ openUrl: string }>(config, '/api/tools/dev-session', {
+    const backend = await readBackend()
+    const res = await api<{ openUrl: string; session: { backendHash: string | null } }>(config, '/api/tools/dev-session', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ circleId, url, manifest }),
+      body: JSON.stringify({ circleId, url, manifest, backend }),
     })
+    if (res.session.backendHash) console.log(`后端已上传（${res.session.backendHash.slice(0, 8)}）`)
     return res.openUrl
   }
 
@@ -286,17 +324,22 @@ async function dev(options: { port: number; circle?: string }): Promise<void> {
   const openUrl = await register()
   console.log(`本地工具：${url}`)
   console.log(`在火塘里打开：${openUrl}`)
-  console.log('改了 harth.json 会自动重新登记；Ctrl+C 结束')
+  console.log(`改了 ${TOOL_MANIFEST_FILE}${manifest.backend ? ` 或 ${manifest.backend}` : ''} 会自动重新登记；Ctrl+C 结束`)
   openBrowser(openUrl)
 
-  watch(join(dir, TOOL_MANIFEST_FILE), async () => {
-    try {
-      manifest = await readManifest(dir)
-      await register()
-      console.log('harth.json 已更新')
-    } catch (err) {
-      console.error(err instanceof Error ? err.message : err)
-    }
+  let pending: ReturnType<typeof setTimeout> | null = null
+  watch(dir, (_event, filename) => {
+    if (filename !== TOOL_MANIFEST_FILE && filename !== manifest.backend) return
+    if (pending) clearTimeout(pending)
+    pending = setTimeout(async () => {
+      try {
+        manifest = await readManifest(dir)
+        await register()
+        console.log(`${filename} 已更新`)
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : err)
+      }
+    }, 150)
   })
 
   const stop = async () => {
@@ -367,6 +410,58 @@ async function publish(): Promise<void> {
   if (res.version.status === 'pending') console.log('审核结果用 harth status 查看')
 }
 
+interface RunView {
+  id: string
+  status: string
+  errorCode: string | null
+  error: string | null
+  logs: string | null
+  result?: unknown
+  durationMs: number | null
+  createdAt: string
+  action: string
+  trigger: string
+}
+
+function printRun(run: RunView): void {
+  console.log(`运行 ${run.id}  ${run.action}  ${run.status}${run.durationMs !== null ? `  ${run.durationMs} ms` : ''}`)
+  if (run.logs) console.log(run.logs.replace(/^/gm, '  | '))
+  if (run.status === 'ok') console.log(`  结果：${JSON.stringify(run.result ?? null)}`)
+  else if (run.error) console.log(`  ${run.errorCode ?? ''} ${run.error}`)
+}
+
+// ---------- run / logs ----------
+
+async function run(action: string | undefined, inputText: string | undefined): Promise<void> {
+  if (!action) throw new CliError('用法：harth run <动作> [--input <json>]')
+  let input: unknown = undefined
+  if (inputText !== undefined) {
+    try {
+      input = JSON.parse(inputText)
+    } catch {
+      throw new CliError('--input 必须是合法的 JSON')
+    }
+  }
+  const config = await readConfig()
+  const res = await api<{ run: RunView }>(config, '/api/tools/dev-session/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, input }),
+  })
+  printRun(res.run)
+  if (res.run.status !== 'ok') process.exitCode = 1
+}
+
+async function logs(): Promise<void> {
+  const config = await readConfig()
+  const res = await api<{ runs: RunView[] }>(config, '/api/tools/dev-session/runs')
+  if (res.runs.length === 0) {
+    console.log('开发会话里还没有运行记录')
+    return
+  }
+  for (const item of res.runs) printRun(item)
+}
+
 async function status(): Promise<void> {
   const config = await readConfig()
   const res = await api<{ tools: { slug: string; name: string; versions: VersionView[] }[] }>(
@@ -392,6 +487,9 @@ const HELP = `用法：harth <命令>
                          新建一个工具，目录名就是 slug
   dev [--port 3102] [--circle <圈子id>]
                          本地运行，并在火塘里实时预览
+  run <动作> [--input <json>]
+                         在开发会话的圈里跑一次后端动作
+  logs                   开发会话的运行记录
   publish                打包上传，进入审核
   status                 查看审核结果
   whoami                 当前登录账号
@@ -407,6 +505,7 @@ async function main(): Promise<void> {
       circle: { type: 'string' },
       name: { type: 'string' },
       description: { type: 'string' },
+      input: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
     },
   })
@@ -422,6 +521,10 @@ async function main(): Promise<void> {
       return init(positionals[1], { name: values.name, description: values.description })
     case 'dev':
       return dev({ port: Number(values.port ?? 3102), circle: values.circle })
+    case 'run':
+      return run(positionals[1], values.input)
+    case 'logs':
+      return logs()
     case 'publish':
       return publish()
     case 'status':

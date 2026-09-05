@@ -1,6 +1,6 @@
 'use client'
 
-import { TOOL_SCOPES, type ToolScope } from '@harth/shared'
+import { describeCron, TOOL_SCOPES, type ToolSchedule, type ToolScope } from '@harth/shared'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useCallback, useState } from 'react'
@@ -17,6 +17,8 @@ interface ToolDetail {
   name: string
   description: string
   permissions: ToolScope[]
+  schedules: ToolSchedule[]
+  hasBackend: boolean
   version: string
   updatedAt: string | null
   isMine: boolean
@@ -115,8 +117,19 @@ export default function ToolPage() {
               </li>
             ))}
           </ul>
+          {tool.schedules.length > 0 && (
+            <ul className="mt-2 flex flex-col gap-1 text-sm">
+              {tool.schedules.map((schedule) => (
+                <li key={schedule.name} className="flex gap-2">
+                  <span className="text-muted-foreground">·</span>
+                  {describeCron(schedule.cron) ?? schedule.cron} 运行 {schedule.action}
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="mt-2 text-xs text-muted-foreground">
             没有列出的它做不了；工具的数据按圈隔离，卸载即清空。
+            {tool.hasBackend ? '它的后端代码在平台沙箱里运行，没有网络。' : ''}
           </p>
         </div>
       </Panel>

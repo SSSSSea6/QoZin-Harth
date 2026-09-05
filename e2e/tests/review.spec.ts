@@ -8,7 +8,7 @@ test('审核页：待审 → 试运行 → 驳回 → 通过 → 下架；非管
 
   await register(devPage, '开发者')
   const slug = `review-${Math.random().toString(36).slice(2, 8)}`
-  const name = uniqueName('审核计数器')
+  const name = uniqueName('审核工具')
   const publishVersion = async (version: string) => {
     const res = await devPage.request.post(`${API_URL}/api/tools/publish`, {
       headers: { 'content-type': 'application/zip' },

@@ -13,7 +13,10 @@ import {
   type CheckResult,
   type ToolPackage,
 } from './package'
+import { validateBackend } from './executor'
 import { aiReview, type AiVerdict } from './review'
+import { backendHash } from './runs'
+import { checkSchedules } from './schedules'
 import { loadPackageFiles, savePackage } from './store'
 
 export interface ReviewRecord {
@@ -57,15 +60,12 @@ export async function currentVersion(tool: ToolRow): Promise<ToolVersionRow | nu
   return getVersion(tool.currentVersionId)
 }
 
+// 名字只在版本通过并成为当前版本时更新，发布时不改
 export async function ensureTool(userId: string, slug: string, name: string): Promise<ToolRow> {
   const existing = await getTool(slug)
   if (existing) {
     if (existing.ownerId !== userId) {
       throw new HTTPException(403, { message: `slug「${slug}」已经被别人用了` })
-    }
-    if (existing.name !== name) {
-      await db.update(tools).set({ name }).where(eq(tools.id, existing.id))
-      return { ...existing, name }
     }
     return existing
   }
@@ -95,6 +95,21 @@ export async function publish(
   }
 
   const checks = runChecks(pkg, allowedOrigins())
+  if (pkg.manifest.schedules.length > 0) {
+    const problem = checkSchedules(pkg.manifest.schedules)
+    checks.push({ name: '时间表', ok: problem === null, detail: problem ?? undefined })
+  }
+  const backendFile = pkg.manifest.backend ? pkg.files[pkg.manifest.backend] : undefined
+  let hash: string | null = null
+  if (pkg.manifest.backend && backendFile && checks.every((c) => c.ok)) {
+    hash = backendHash(backendFile)
+    const problem = await validateBackend(
+      strFromU8(backendFile),
+      pkg.manifest.backend,
+      pkg.manifest.actions.map((a) => a.name),
+    )
+    checks.push({ name: '后端代码', ok: problem === null, detail: problem ?? undefined })
+  }
   const failed = checks.some((c) => !c.ok)
   const review: ReviewRecord = failed ? { checks, decidedBy: 'checks' } : { checks }
   const [version] = await db
@@ -105,6 +120,7 @@ export async function publish(
       manifest: pkg.manifest,
       status: failed ? 'rejected' : 'pending',
       review,
+      backendHash: hash,
       reviewedAt: failed ? new Date() : null,
     })
     .returning()
@@ -157,7 +173,8 @@ async function approveVersion(version: ToolVersionRow, review: ReviewRecord): Pr
     if (!tool) return
     const current = tool.currentVersionId ? await getVersion(tool.currentVersionId) : null
     if (!current || compareVersions(version.version, current.version) >= 0) {
-      await tx.update(tools).set({ currentVersionId: version.id }).where(eq(tools.id, tool.id))
+      const manifest = version.manifest as ToolManifest
+      await tx.update(tools).set({ currentVersionId: version.id, name: manifest.name }).where(eq(tools.id, tool.id))
     }
   })
 }
@@ -218,8 +235,12 @@ export async function adminDecide(
 ): Promise<ToolVersionRow> {
   const version = await getVersion(versionId)
   if (!version) throw new HTTPException(404, { message: '版本不存在' })
+  const previous = (version.review ?? { checks: [] }) as ReviewRecord
+  if (decision === 'approve' && previous.checks.some((c) => !c.ok)) {
+    throw new HTTPException(409, { message: '自动检查没通过的版本不能通过，请修好后重新发布' })
+  }
   const review: ReviewRecord = {
-    ...((version.review ?? { checks: [] }) as ReviewRecord),
+    ...previous,
     admin: { decision, note, by: adminId, at: new Date().toISOString() },
     decidedBy: 'admin',
   }

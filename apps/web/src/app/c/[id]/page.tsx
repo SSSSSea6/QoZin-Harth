@@ -1,5 +1,6 @@
 'use client'
 
+import { describeCron, TOOL_SCOPES, type ToolScope } from '@harth/shared'
 import { Copy, Flame, SquarePen } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -571,18 +572,56 @@ interface Member {
   joinedAt: string
 }
 
+interface ToolScheduleView {
+  name: string
+  cron: string
+  action: string
+}
+
 interface InstalledTool {
   slug: string
   name: string
   description: string
   installedBy: string
   installedAt: string
+  hasBackend: boolean
+  schedules: ToolScheduleView[]
+  needsConfirm: boolean
+  pending: { scopes: ToolScope[]; schedules: ToolScheduleView[] }
+}
+
+interface ToolRunView {
+  id: string
+  trigger: 'call' | 'schedule' | 'manual'
+  action: string
+  status: string
+  errorCode: string | null
+  error: string | null
+  logs: string | null
+  durationMs: number | null
+  createdAt: string
+}
+
+const TRIGGER_LABEL = { call: '前端调用', schedule: '定时', manual: '手动' } as const
+const RUN_STATUS_LABEL: Record<string, string> = {
+  queued: '排队中',
+  running: '运行中',
+  ok: '成功',
+  error: '失败',
+  timeout: '超时',
+  skipped: '跳过',
+  interrupted: '中断',
+}
+
+function scheduleText(schedule: ToolScheduleView): string {
+  return `${describeCron(schedule.cron) ?? schedule.cron} 运行 ${schedule.action}`
 }
 
 function ToolsTab({ circle }: { circle: CircleDetail }) {
   const [tools, setTools] = useState<InstalledTool[] | null>(null)
   const [dev, setDev] = useState<{ slug: string; name: string } | null>(null)
   const [error, setError] = useState('')
+  const [runsOf, setRunsOf] = useState<string | null>(null)
   const isOwner = circle.myRole === 'owner'
 
   const load = useCallback(async () => {
@@ -601,6 +640,14 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
   async function uninstall(tool: InstalledTool) {
     if (!window.confirm(`卸载「${tool.name}」？它在这个圈里保存的数据会一起清空。`)) return
     const res = await api.circles[':id'].tools[':slug'].$delete({
+      param: { id: circle.id, slug: tool.slug },
+    })
+    if (!res.ok) setError(await errorText(res))
+    else void load()
+  }
+
+  async function confirm(tool: InstalledTool) {
+    const res = await api.circles[':id'].tools[':slug'].confirm.$post({
       param: { id: circle.id, slug: tool.slug },
     })
     if (!res.ok) setError(await errorText(res))
@@ -638,26 +685,57 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
       )}
       <ul>
         {tools?.map((tool) => (
-          <li key={tool.slug} className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
-            <Link href={`/c/${circle.id}/t/${tool.slug}`}>
-              <Avatar seed={`tool:${tool.slug}`} size={36} className="rounded-lg" />
-            </Link>
-            <div className="min-w-0 flex-1">
-              <Link
-                href={`/c/${circle.id}/t/${tool.slug}`}
-                className="block truncate text-[15px] font-medium hover:underline"
-              >
-                {tool.name}
+          <li key={tool.slug} className="border-b last:border-b-0">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Link href={`/c/${circle.id}/t/${tool.slug}`}>
+                <Avatar seed={`tool:${tool.slug}`} size={36} className="rounded-lg" />
               </Link>
-              <span className="block truncate text-xs text-muted-foreground">
-                {tool.description} · {tool.installedBy} 安装
-              </span>
+              <div className="min-w-0 flex-1">
+                <Link
+                  href={`/c/${circle.id}/t/${tool.slug}`}
+                  className="block truncate text-[15px] font-medium hover:underline"
+                >
+                  {tool.name}
+                </Link>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {tool.description} · {tool.installedBy} 安装
+                </span>
+                {tool.schedules.length > 0 && (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    定时：{tool.schedules.map(scheduleText).join('；')}
+                  </span>
+                )}
+              </div>
+              {isOwner && tool.hasBackend && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => setRunsOf(runsOf === tool.slug ? null : tool.slug)}
+                >
+                  运行记录
+                </Button>
+              )}
+              {isOwner && circle.lifecycle.state !== 'archived' && (
+                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => uninstall(tool)}>
+                  卸载
+                </Button>
+              )}
             </div>
-            {isOwner && circle.lifecycle.state !== 'archived' && (
-              <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => uninstall(tool)}>
-                卸载
-              </Button>
+            {isOwner && tool.needsConfirm && (
+              <div className="flex flex-wrap items-center gap-3 border-t bg-amber-500/10 px-4 py-2.5 text-sm">
+                <span className="min-w-0 flex-1">
+                  新版本改了权限或时间表：
+                  {tool.pending.scopes.map((scope) => TOOL_SCOPES[scope]).join('、')}
+                  {tool.pending.schedules.length > 0 && `；定时 ${tool.pending.schedules.map(scheduleText).join('；')}`}
+                  。确认前按原来的执行。
+                </span>
+                <Button size="sm" onClick={() => confirm(tool)}>
+                  确认
+                </Button>
+              </div>
             )}
+            {runsOf === tool.slug && <ToolRuns circleId={circle.id} slug={tool.slug} />}
           </li>
         ))}
       </ul>
@@ -669,6 +747,50 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
         </div>
       )}
     </>
+  )
+}
+
+function ToolRuns({ circleId, slug }: { circleId: string; slug: string }) {
+  const [runs, setRuns] = useState<ToolRunView[] | null>(null)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    const res = await api.circles[':id'].tools[':slug'].runs.$get({ param: { id: circleId, slug } })
+    if (!res.ok) {
+      setError(await errorText(res))
+      return
+    }
+    setRuns((await res.json()).runs as ToolRunView[])
+  }, [circleId, slug])
+
+  useLoad(load)
+
+  if (error) return <p className="border-t px-4 py-3 text-sm text-destructive">{error}</p>
+  if (runs === null) return <p className="border-t px-4 py-3 text-sm text-muted-foreground">加载中…</p>
+  if (runs.length === 0) return <p className="border-t px-4 py-3 text-sm text-muted-foreground">还没有运行过。</p>
+  return (
+    <ul className="border-t">
+      {runs.map((run) => (
+        <li key={run.id} className="border-b px-4 py-2 text-sm last:border-b-0">
+          <div className="flex flex-wrap items-center gap-x-2 text-[13px]">
+            <span className={run.status === 'ok' ? '' : run.status === 'queued' || run.status === 'running' ? 'text-muted-foreground' : 'text-destructive'}>
+              {RUN_STATUS_LABEL[run.status] ?? run.status}
+            </span>
+            <span className="font-mono">{run.action}</span>
+            <span className="text-muted-foreground">{TRIGGER_LABEL[run.trigger]}</span>
+            <span className="text-muted-foreground">{timeAgo(run.createdAt)}</span>
+            {run.durationMs !== null && <span className="text-muted-foreground">{run.durationMs} ms</span>}
+          </div>
+          {run.error && <p className="mt-0.5 text-[13px] text-destructive">{run.error}</p>}
+          {run.logs && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-xs text-muted-foreground">日志</summary>
+              <pre className="mt-1 max-h-60 overflow-auto rounded-md border px-3 py-2 text-xs leading-5">{run.logs}</pre>
+            </details>
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }
 

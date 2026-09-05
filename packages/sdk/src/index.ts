@@ -1,54 +1,17 @@
-export interface HarthUser {
-  id: string
-  name: string
-}
+import { TOOL_API_OPS } from '@harth/shared/tool-api'
+import { createHarthApi, HarthError, type HarthCircle, type HarthToolInfo, type HarthUser } from './client'
 
-export interface HarthCircle {
-  id: string
-  name: string
-}
+export { HarthError } from './client'
+export type { HarthCircle, HarthToolInfo, HarthUser, Member, PostSummary, StorageItem } from './client'
 
 export interface HarthContext {
   user: HarthUser
   circle: HarthCircle
-  tool: { slug: string; name: string; version: string }
+  tool: HarthToolInfo
   scopes: string[]
   apiUrl: string
   entryUrl: string
   origin: string
-}
-
-export interface StorageItem<T = unknown> {
-  key: string
-  value: T
-  version: number
-}
-
-export interface Member {
-  id: string
-  name: string
-  role: string
-  joinedAt: string
-}
-
-export interface PostSummary {
-  id: string
-  title: string
-  templateKey: string
-  fields: Record<string, unknown>
-  status: string
-  createdAt: string
-  authorId: string
-  authorName: string
-}
-
-export class HarthError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message)
-  }
 }
 
 interface ContextMessage {
@@ -66,6 +29,20 @@ class Harth {
   private expiresAt = 0
   private hostOrigin: string | null
   private waiters: ((context: HarthContext) => void)[] = []
+  private api = createHarthApi(async (op, args) => {
+    const route = TOOL_API_OPS[op]
+    const body = route.body?.(...args)
+    const res = await this.send(route.path(...args), {
+      method: route.method,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+    return { status: res.status, body: await res.json().catch(() => null) }
+  })
+
+  storage = this.api.storage
+  members = this.api.members
+  circleInfo = this.api.circleInfo
+  posts = this.api.posts
 
   constructor() {
     this.hostOrigin = safeOrigin(document.referrer)
@@ -96,49 +73,15 @@ class Harth {
     })
   }
 
-  storage = {
-    get: async <T = unknown>(key: string): Promise<StorageItem<T> | null> => {
-      const res = await this.request(`/storage/${encodeURIComponent(key)}`, {}, [404])
-      return res ? ((res as { item: StorageItem<T> }).item ?? null) : null
-    },
-    set: async <T = unknown>(key: string, value: T, options: { expectedVersion?: number } = {}): Promise<StorageItem<T>> => {
-      const res = (await this.request(`/storage/${encodeURIComponent(key)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ value, expectedVersion: options.expectedVersion }),
-      })) as { item: StorageItem<T> }
-      return res.item
-    },
-    delete: async (key: string): Promise<void> => {
-      await this.request(`/storage/${encodeURIComponent(key)}`, { method: 'DELETE' })
-    },
-    list: async <T = unknown>(prefix?: string): Promise<StorageItem<T>[]> => {
-      const query = prefix ? `?prefix=${encodeURIComponent(prefix)}` : ''
-      const res = (await this.request(`/storage${query}`)) as { items: StorageItem<T>[] }
-      return res.items
-    },
-  }
-
-  members = async (): Promise<Member[]> => {
-    const res = (await this.request('/members')) as { members: Member[] }
-    return res.members
-  }
-
-  circleInfo = async (): Promise<HarthCircle & { memberCount: number }> => {
-    const res = (await this.request('/circle')) as { circle: HarthCircle & { memberCount: number } }
-    return res.circle
-  }
-
-  posts = {
-    list: async (): Promise<PostSummary[]> => {
-      const res = (await this.request('/posts')) as { posts: PostSummary[] }
-      return res.posts
-    },
-    create: async (input: { title: string; body?: string }): Promise<{ id: string }> => {
-      const res = (await this.request('/posts', { method: 'POST', body: JSON.stringify(input) })) as {
-        post: { id: string }
-      }
-      return res.post
-    },
+  // 调用工具自己的后端动作（清单里 actions 声明、backend 文件实现）
+  async call<T = unknown>(name: string, input?: unknown): Promise<T> {
+    const res = await this.send(`/actions/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      body: JSON.stringify({ input: input ?? null }),
+    })
+    const body = (await res.json().catch(() => null)) as { result?: T; error?: string } | null
+    if (!res.ok) throw new HarthError(res.status, body?.error ?? `请求失败（${res.status}）`)
+    return body?.result as T
   }
 
   private require(): HarthContext {
@@ -176,30 +119,20 @@ class Harth {
     })
   }
 
-  private async request(path: string, init: RequestInit = {}, okStatuses: number[] = []): Promise<unknown> {
+  private async send(path: string, init: RequestInit): Promise<Response> {
     const context = await this.connect()
     if (Date.now() / 1000 > this.expiresAt - 30) await this.refresh()
-    const send = () =>
+    const request = () =>
       fetch(`${context.apiUrl}/api/tool${path}`, {
         ...init,
-        headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
       })
-    let res = await send()
+    let res = await request()
     if (res.status === 401) {
       await this.refresh()
-      res = await send()
+      res = await request()
     }
-    if (okStatuses.includes(res.status)) return null
-    if (!res.ok) {
-      let message = `请求失败（${res.status}）`
-      try {
-        message = ((await res.json()) as { error?: string }).error ?? message
-      } catch {
-        // 保留默认文案
-      }
-      throw new HarthError(res.status, message)
-    }
-    return res.json()
+    return res
   }
 }
 

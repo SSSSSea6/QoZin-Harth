@@ -3,6 +3,7 @@ import { sign, verify } from 'hono/jwt'
 import type { ToolScope } from '@harth/shared'
 import { env } from '../env'
 
+// dev：开发会话；review：管理员试运行，vid 是版本；by=tool：定时运行，没有用户；inst：安装时间戳，重装即失效
 export interface ToolTokenPayload {
   sub: string
   cid: string
@@ -10,6 +11,9 @@ export interface ToolTokenPayload {
   scopes: ToolScope[]
   dev?: boolean
   review?: boolean
+  vid?: string
+  by?: 'tool'
+  inst?: number
   exp: number
   [key: string]: unknown
 }

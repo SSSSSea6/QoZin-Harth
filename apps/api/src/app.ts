@@ -12,6 +12,7 @@ import { toolApiApp } from './routes/tool-api'
 import { toolStaticApp } from './routes/tool-static'
 import { toolsApp } from './routes/tools'
 import { usersApp } from './routes/users'
+import { configureToolRuns } from './tools/runs'
 
 export const app = new Hono()
   .use('/api/tool/*', cors({ origin: '*', allowHeaders: ['Authorization', 'Content-Type'] }))
@@ -30,6 +31,9 @@ export const app = new Hono()
 if (env.TEST_HOOKS) {
   app.route('/api/test', testHooksApp)
 }
+
+// 工具后端的数据访问也走这个 app，同一套令牌与权限
+configureToolRuns(app)
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {

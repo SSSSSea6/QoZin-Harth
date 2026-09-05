@@ -3,7 +3,8 @@
   "type": "module",
   "private": true,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./tool-api": "./src/tool-api.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

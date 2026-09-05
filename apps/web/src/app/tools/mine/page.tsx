@@ -1,5 +1,6 @@
 'use client'
 
+import { TOOL_RUN_ERROR_CODES } from '@harth/shared'
 import Link from 'next/link'
 import { useCallback, useState } from 'react'
 import { Columns } from '@/components/columns'
@@ -30,6 +31,16 @@ interface MyTool {
   name: string
   currentVersionId: string | null
   versions: Version[]
+  runs: { total: number; ok: number; failed: Record<string, number> }
+}
+
+// 真实圈的运行只给次数与错误码，不给内容
+function runSummary(runs: MyTool['runs']): string {
+  if (runs.total === 0) return ''
+  const failed = Object.entries(runs.failed)
+    .map(([code, n]) => `${TOOL_RUN_ERROR_CODES[code as keyof typeof TOOL_RUN_ERROR_CODES] ?? code} ${n}`)
+    .join('、')
+  return `最近 7 天后端运行 ${runs.total} 次，成功 ${runs.ok} 次${failed ? `，失败：${failed}` : ''}`
 }
 
 export default function MyToolsPage() {
@@ -60,10 +71,13 @@ export default function MyToolsPage() {
             <li>
               <code>harth publish</code> 上传
             </li>
-            <li>自动检查文件与外部资源</li>
+            <li>自动检查文件、外部资源、后端与时间表</li>
             <li>AI 审核代码与权限</li>
             <li>通过即上架，圈主可安装</li>
           </ol>
+          <p className="mt-3 text-sm text-muted-foreground">
+            后端动作用 <code>harth run</code> 在开发圈里试跑，<code>harth logs</code> 看记录。
+          </p>
         </Panel>
       }
     >
@@ -93,6 +107,9 @@ export default function MyToolsPage() {
                   </Link>
                 )}
               </div>
+              {runSummary(tool.runs) && (
+                <p className="mt-1 text-xs text-muted-foreground">{runSummary(tool.runs)}</p>
+              )}
               <ul className="mt-2 flex flex-col gap-2">
                 {tool.versions.map((v) => (
                   <li key={v.id} className="rounded-md border px-3 py-2 text-sm">

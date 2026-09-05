@@ -214,9 +214,12 @@ interface ReviewItem {
   version: string
   status: string
   review: { decidedBy?: string }
+  tool: { slug: string }
   developer: { name: string }
   permissions: string[]
 }
+
+const ofRollCall = (items: ReviewItem[]) => items.filter((v) => v.tool.slug === 'roll-call')
 
 async function marketVersion(): Promise<string | undefined> {
   const market = await owner.json<{ tools: { slug: string; version: string }[] }>('/api/tools')
@@ -237,10 +240,11 @@ describe('审核页接口', () => {
     expect((await dev.json('/api/tools/review')).status).toBe(403)
     const { status, body } = await admin.json<{ pending: ReviewItem[]; recent: ReviewItem[] }>('/api/tools/review')
     expect(status).toBe(200)
-    expect(body.pending.map((v) => v.version)).toEqual(['1.0.2'])
-    expect(body.pending[0]?.developer.name).toBe('开发者')
-    expect(body.pending[0]?.permissions).toEqual(manifest.permissions)
-    expect(body.recent.map((v) => [v.version, v.review.decidedBy])).toEqual([['1.0.1', 'admin'], ['1.0.0', 'checks']])
+    const pending = ofRollCall(body.pending)
+    expect(pending.map((v) => v.version)).toEqual(['1.0.2'])
+    expect(pending[0]?.developer.name).toBe('开发者')
+    expect(pending[0]?.permissions).toEqual(manifest.permissions)
+    expect(ofRollCall(body.recent).map((v) => [v.version, v.review.decidedBy])).toEqual([['1.0.1', 'admin'], ['1.0.0', 'checks']])
   })
 
   it('详情与文件：开发者和管理员能看，别人当不存在', async () => {
@@ -300,8 +304,8 @@ describe('审核页接口', () => {
     expect(version?.review.admin?.note).toBe('先把说明写清楚')
 
     const queue = await admin.json<{ pending: ReviewItem[]; recent: ReviewItem[] }>('/api/tools/review')
-    expect(queue.body.pending).toEqual([])
-    expect(queue.body.recent[0]?.version).toBe('1.0.2')
+    expect(ofRollCall(queue.body.pending)).toEqual([])
+    expect(ofRollCall(queue.body.recent)[0]?.version).toBe('1.0.2')
   })
 
   it('下架当前上架版本后退回更早的已通过版本，都没有就从市场消失；驳回的可以改判通过', async () => {

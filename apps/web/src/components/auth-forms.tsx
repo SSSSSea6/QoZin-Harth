@@ -8,19 +8,30 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { signIn, signUp } from '@/lib/auth-client'
 
+// better-auth 的错误码转成中文，认不出的用它自带的英文
+const AUTH_ERRORS: Record<string, string> = {
+  USER_ALREADY_EXISTS: '这个邮箱已经注册过了，去「登录」',
+  INVALID_EMAIL_OR_PASSWORD: '邮箱或密码不对',
+  INVALID_PASSWORD: '邮箱或密码不对',
+  USER_NOT_FOUND: '邮箱或密码不对',
+  INVALID_EMAIL: '邮箱格式不对',
+  PASSWORD_TOO_SHORT: '密码至少 8 位',
+  PASSWORD_TOO_LONG: '密码太长了',
+}
+
 export function AuthForms({ next = '/' }: { next?: string }) {
   const router = useRouter()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function handle(
-    action: () => Promise<{ error?: { message?: string } | null }>,
+    action: () => Promise<{ error?: { code?: string; message?: string } | null }>,
   ) {
     setBusy(true)
     setError('')
     const { error: err } = await action()
     if (err) {
-      setError(err.message ?? '出错了，稍后再试')
+      setError((err.code && AUTH_ERRORS[err.code]) || err.message || '出错了，稍后再试')
       setBusy(false)
       return
     }

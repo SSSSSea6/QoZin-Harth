@@ -11,8 +11,8 @@ import { signIn, signUp } from '@/lib/auth-client'
 // better-auth 的错误码转成中文，认不出的用它自带的英文
 const AUTH_ERRORS: Record<string, string> = {
   USER_ALREADY_EXISTS: '这个邮箱已经注册过了，去「登录」',
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: '这个邮箱已经注册过了，去「登录」',
   INVALID_EMAIL_OR_PASSWORD: '邮箱或密码不对',
-  INVALID_PASSWORD: '邮箱或密码不对',
   USER_NOT_FOUND: '邮箱或密码不对',
   INVALID_EMAIL: '邮箱格式不对',
   PASSWORD_TOO_SHORT: '密码至少 8 位',

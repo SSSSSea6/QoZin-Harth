@@ -93,13 +93,13 @@ export default function ToolPage() {
     >
       <Panel>
         <div className="flex gap-4">
-          <Avatar seed={`tool:${tool.slug}`} size={56} className="rounded-lg" />
+          <Avatar seed={`tool:${tool.slug}`} name={tool.name} size={64} shape="square" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold">{tool.name}</h1>
-              <span className="text-xs text-muted-foreground">v{tool.version}</span>
+              <h1 className="text-[22px] font-semibold leading-tight">{tool.name}</h1>
+              <span className="font-mono text-xs text-muted-foreground">v{tool.version}</span>
             </div>
-            <p className="mt-1 text-[15px] leading-7">{tool.description}</p>
+            <p className="mt-1.5 text-[15px] leading-6 text-foreground-2">{tool.description}</p>
             <p className="mt-1 text-[13px] text-muted-foreground">
               {tool.updatedAt ? `更新于 ${timeAgo(tool.updatedAt)}` : ''}
               {tool.isMine ? ' · 这是你发布的' : ''}
@@ -168,7 +168,7 @@ function InstallList({
     <ul className="flex flex-col gap-3">
       {circles.map((circle) => (
         <li key={circle.id} className="flex items-center gap-3">
-          <Avatar seed={circle.id} size={28} />
+          <Avatar seed={circle.id} name={circle.name} size={28} shape="square" />
           <span className="min-w-0 flex-1 truncate text-sm">{circle.name}</span>
           <Button
             size="sm"

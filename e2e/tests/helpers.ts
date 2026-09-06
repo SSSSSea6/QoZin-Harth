@@ -121,9 +121,12 @@ export async function register(page: Page, name: string): Promise<User> {
 
 export async function joinSchool(page: Page): Promise<void> {
   await page.goto('/')
-  const aside = page.getByRole('complementary')
-  await aside.getByRole('button', { name: '加入' }).click()
-  await expect(aside.getByRole('button', { name: '加入' })).toHaveCount(0)
+  // 右栏还有「身份圈里的圈子」，只认「身份圈」这一块；加入后整块消失
+  const card = page.getByRole('complementary').locator('section', {
+    has: page.getByRole('heading', { name: '身份圈', exact: true }),
+  })
+  await card.getByRole('button', { name: '加入' }).click()
+  await expect(card).toHaveCount(0)
 }
 
 export async function createCircle(

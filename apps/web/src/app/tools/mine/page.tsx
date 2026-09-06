@@ -4,7 +4,7 @@ import { TOOL_RUN_ERROR_CODES } from '@harth/shared'
 import Link from 'next/link'
 import { useCallback, useState } from 'react'
 import { Columns } from '@/components/columns'
-import { Panel, PanelTitle } from '@/components/panel'
+import { Panel, PanelHeader, PanelTitle } from '@/components/panel'
 import { Badge } from '@/components/ui/badge'
 import { api, errorText } from '@/lib/api'
 import { timeAgo } from '@/lib/format'
@@ -82,22 +82,24 @@ export default function MyToolsPage() {
       }
     >
       <Panel padded={false}>
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h1 className="text-[15px] font-semibold">我发布的工具</h1>
-          <Link href="/tools" className="text-xs text-muted-foreground hover:text-foreground">
-            工具市场
-          </Link>
-        </div>
-        {error && <p className="px-4 py-6 text-sm text-destructive">{error}</p>}
-        {tools === null && !error && <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>}
+        <PanelHeader
+          title="我发布的工具"
+          action={
+            <Link href="/tools" className="text-xs text-muted-foreground hover:text-foreground">
+              工具市场
+            </Link>
+          }
+        />
+        {error && <p className="px-5 py-6 text-sm text-destructive">{error}</p>}
+        {tools === null && !error && <p className="px-5 py-6 text-sm text-muted-foreground">加载中…</p>}
         {tools && tools.length === 0 && (
-          <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+          <p className="px-5 py-10 text-center text-sm text-muted-foreground">
             还没有发布过工具。在终端里 <code>harth init</code> 开始。
           </p>
         )}
         <ul>
           {tools?.map((tool) => (
-            <li key={tool.slug} className="border-b px-4 py-3 last:border-b-0">
+            <li key={tool.slug} className="border-b px-5 py-3 last:border-b-0">
               <div className="flex items-center gap-2">
                 <span className="text-[15px] font-medium">{tool.name}</span>
                 <span className="text-xs text-muted-foreground">{tool.slug}</span>

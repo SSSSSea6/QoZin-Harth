@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useCallback, useState } from 'react'
 import { Avatar } from '@/components/avatar'
 import { Columns } from '@/components/columns'
-import { Panel } from '@/components/panel'
+import { ListSkeleton, Panel, PanelHeader } from '@/components/panel'
 import { Badge } from '@/components/ui/badge'
 import { api, errorText } from '@/lib/api'
 import { timeAgo } from '@/lib/format'
@@ -51,14 +51,11 @@ export default function ReviewQueuePage() {
   return (
     <Columns>
       <Panel padded={false}>
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h1 className="text-[15px] font-semibold">待审</h1>
-          {data && <span className="text-xs text-muted-foreground">{data.pending.length} 个版本</span>}
-        </div>
-        {error && <p className="px-4 py-10 text-center text-sm text-muted-foreground">{error}</p>}
-        {data === null && !error && <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>}
+        <PanelHeader title="待审" description={data ? `${data.pending.length} 个版本` : undefined} />
+        {error && <p className="px-5 py-10 text-center text-sm text-muted-foreground">{error}</p>}
+        {data === null && !error && <ListSkeleton rows={2} />}
         {data && data.pending.length === 0 && (
-          <p className="px-4 py-10 text-center text-sm text-muted-foreground">没有待审的工具。</p>
+          <p className="px-5 py-10 text-center text-sm text-muted-foreground">没有待审的工具。</p>
         )}
         <ul>
           {data?.pending.map((item) => (
@@ -69,11 +66,9 @@ export default function ReviewQueuePage() {
 
       {data && (
         <Panel padded={false}>
-          <div className="border-b px-4 py-3">
-            <h2 className="text-[15px] font-semibold">已处理</h2>
-          </div>
+          <PanelHeader as="h2" title="已处理" />
           {data.recent.length === 0 && (
-            <p className="px-4 py-10 text-center text-sm text-muted-foreground">还没有处理过的版本。</p>
+            <p className="px-5 py-10 text-center text-sm text-muted-foreground">还没有处理过的版本。</p>
           )}
           <ul>
             {data.recent.map((item) => (
@@ -98,11 +93,11 @@ function ReviewRow({ item }: { item: ReviewItem }) {
   const by = item.review?.decidedBy ? DECIDED_BY[item.review.decidedBy] : ''
   return (
     <li className="border-b last:border-b-0">
-      <Link href={`/tools/review/${item.id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/40">
-        <Avatar seed={`tool:${item.tool.slug}`} size={40} className="rounded-lg" />
+      <Link href={`/tools/review/${item.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-hover">
+        <Avatar seed={`tool:${item.tool.slug}`} name={item.tool.name} size={44} shape="square" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-[15px] font-medium">{item.tool.name}</span>
+            <span className="truncate text-base font-semibold">{item.tool.name}</span>
             <span className="font-mono text-xs text-muted-foreground">v{item.version}</span>
             {decided && (
               <Badge variant={VERSION_STATUS[item.status].variant} className="rounded-sm">

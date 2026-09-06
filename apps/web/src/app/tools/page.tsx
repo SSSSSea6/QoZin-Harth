@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useCallback, useState } from 'react'
 import { Avatar } from '@/components/avatar'
 import { Columns } from '@/components/columns'
-import { Panel, PanelTitle } from '@/components/panel'
+import { ListSkeleton, Panel, PanelHeader, PanelTitle } from '@/components/panel'
 import { api, errorText } from '@/lib/api'
 import { timeAgo } from '@/lib/format'
 import { useLoad, useRequireSession } from '@/lib/hooks'
@@ -54,28 +54,31 @@ export default function ToolsPage() {
       }
     >
       <Panel padded={false}>
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h1 className="text-[15px] font-semibold">工具</h1>
-          <Link href="/tools/mine" className="text-xs text-muted-foreground hover:text-foreground xl:hidden">
-            我发布的
-          </Link>
-        </div>
-        {error && <p className="px-4 py-6 text-sm text-destructive">{error}</p>}
-        {tools === null && !error && <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>}
+        <PanelHeader
+          title="工具"
+          description="圈主装进圈里，成员直接用"
+          action={
+            <Link href="/tools/mine" className="text-xs text-muted-foreground hover:text-foreground xl:hidden">
+              我发布的
+            </Link>
+          }
+        />
+        {error && <p className="px-5 py-6 text-sm text-destructive">{error}</p>}
+        {tools === null && !error && <ListSkeleton rows={3} />}
         {tools && tools.length === 0 && (
-          <p className="px-4 py-10 text-center text-sm text-muted-foreground">还没有上架的工具。</p>
+          <p className="px-5 py-10 text-center text-sm text-muted-foreground">还没有上架的工具。</p>
         )}
         <ul>
           {tools?.map((tool) => (
             <li key={tool.slug} className="border-b last:border-b-0">
-              <Link href={`/tools/${tool.slug}`} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/40">
-                <Avatar seed={`tool:${tool.slug}`} size={40} className="rounded-lg" />
+              <Link href={`/tools/${tool.slug}`} className="flex items-start gap-3 px-5 py-3 hover:bg-hover">
+                <Avatar seed={`tool:${tool.slug}`} name={tool.name} size={44} shape="square" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-[15px] font-medium">{tool.name}</span>
-                    <span className="text-xs text-muted-foreground">v{tool.version}</span>
+                    <span className="truncate text-base font-semibold">{tool.name}</span>
+                    <span className="font-mono text-xs text-muted-foreground">v{tool.version}</span>
                   </div>
-                  <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{tool.description}</p>
+                  <p className="mt-0.5 line-clamp-2 text-sm text-foreground-2">{tool.description}</p>
                   {tool.updatedAt && (
                     <span className="mt-1 block text-xs text-muted-foreground">
                       更新于 {timeAgo(tool.updatedAt)}

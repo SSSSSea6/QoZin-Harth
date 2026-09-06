@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/avatar'
 import { Columns } from '@/components/columns'
-import { Panel, PanelTitle } from '@/components/panel'
+import { Panel, PanelHeader, PanelTitle } from '@/components/panel'
 import { Stars } from '@/components/stars'
 import { Button } from '@/components/ui/button'
 import {
@@ -79,9 +79,9 @@ export default function ProfilePage() {
     <Columns aside={isSelf ? <AccountPanel email={session.user.email} /> : undefined}>
       <Panel>
         <div className="flex items-start gap-4">
-          <Avatar seed={profile.id} size={64} className="rounded-lg" />
+          <Avatar seed={profile.id} name={profile.name} size={72} />
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold">{profile.name}</h1>
+            <h1 className="text-[22px] font-semibold leading-tight">{profile.name}</h1>
             <p className="mt-0.5 text-[13px] text-muted-foreground">
               {new Date(profile.createdAt).toLocaleDateString('zh-CN')} 加入火塘
             </p>
@@ -105,9 +105,9 @@ export default function ProfilePage() {
           )}
         </div>
 
-        <dl className="mt-5 grid grid-cols-3 border-t pt-4">
+        <dl className="mt-5 grid grid-cols-3 gap-4 border-t pt-4">
           <div className="flex flex-col">
-            <dd className="text-lg font-semibold">
+            <dd className="text-xl font-semibold">
               {reputation.avgRating === null
                 ? '—'
                 : reputation.avgRating.toFixed(1)}
@@ -115,22 +115,20 @@ export default function ProfilePage() {
             <dt className="text-xs text-muted-foreground">评分</dt>
           </div>
           <div className="flex flex-col">
-            <dd className="text-lg font-semibold">{reputation.reviewCount}</dd>
+            <dd className="text-xl font-semibold">{reputation.reviewCount}</dd>
             <dt className="text-xs text-muted-foreground">收到评价</dt>
           </div>
           <div className="flex flex-col">
-            <dd className="text-lg font-semibold">{reputation.completedCount}</dd>
+            <dd className="text-xl font-semibold">{reputation.completedCount}</dd>
             <dt className="text-xs text-muted-foreground">完成交接</dt>
           </div>
         </dl>
       </Panel>
 
       <Panel padded={false}>
-        <div className="border-b px-4 py-3">
-          <h2 className="text-[15px] font-semibold">大家怎么说</h2>
-        </div>
+        <PanelHeader as="h2" title="大家怎么说" />
         {profile.recentReviews.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <p className="px-5 py-8 text-center text-sm text-muted-foreground">
             还没有收到评价。完成第一次交接后会出现在这里。
           </p>
         ) : (
@@ -138,7 +136,7 @@ export default function ProfilePage() {
             {profile.recentReviews.map((review) => (
               <li
                 key={review.id}
-                className="flex flex-col gap-1 border-b px-4 py-3 text-sm last:border-b-0"
+                className="flex flex-col gap-1 border-b px-5 py-3 text-sm last:border-b-0"
               >
                 <div className="flex items-center gap-2">
                   <Stars rating={review.rating} />

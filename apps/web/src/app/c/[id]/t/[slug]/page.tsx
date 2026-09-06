@@ -62,7 +62,7 @@ export default function ToolHostPage() {
           {grant ? (
             <ToolFrame grant={grant} mint={mint} className="h-[calc(100vh-11rem)] min-h-[480px]" />
           ) : (
-            <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>
+            <p className="px-5 py-6 text-sm text-muted-foreground">加载中…</p>
           )}
         </Panel>
       )}

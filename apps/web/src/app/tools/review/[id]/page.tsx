@@ -139,7 +139,7 @@ export default function ReviewDetailPage() {
 
       <Panel>
         <div className="flex gap-4">
-          <Avatar seed={`tool:${detail.tool.slug}`} size={56} className="rounded-lg" />
+          <Avatar seed={`tool:${detail.tool.slug}`} name={detail.tool.name} size={64} shape="square" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-semibold">{detail.tool.name}</h1>
@@ -381,7 +381,7 @@ function RunPanel({ versionId, circles }: { versionId: string; circles: RunCircl
                 const running = grant !== null && circleId === circle.id
                 return (
                   <li key={circle.id} className="flex items-center gap-3">
-                    <Avatar seed={circle.id} size={28} />
+                    <Avatar seed={circle.id} name={circle.name} size={28} shape="square" />
                     <span className="min-w-0 flex-1 truncate text-sm">{circle.name}</span>
                     <Button
                       size="sm"
@@ -401,7 +401,7 @@ function RunPanel({ versionId, circles }: { versionId: string; circles: RunCircl
       </Panel>
       {grant && (
         <Panel padded={false} className="overflow-hidden">
-          <div className="flex items-center gap-2 border-b px-4 py-2 text-sm">
+          <div className="flex items-center gap-2 border-b px-5 py-2 text-sm">
             <span className="font-medium">{grant.context.tool.name}</span>
             <span className="text-xs text-muted-foreground">在「{grant.context.circle.name}」里运行</span>
           </div>

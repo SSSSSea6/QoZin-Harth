@@ -2,6 +2,7 @@ import { postExcerpt, type TemplateKey } from '@harth/shared'
 import { Handshake, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 import { Avatar } from '@/components/avatar'
+import { ListSkeleton } from '@/components/panel'
 import { PostStatusBadge } from '@/components/post-status'
 import { Badge } from '@/components/ui/badge'
 import { formatPrice, timeAgo } from '@/lib/format'
@@ -23,6 +24,10 @@ export interface PostListItemData {
   responseCount: number
 }
 
+export function PostListSkeleton() {
+  return <ListSkeleton rows={5} />
+}
+
 export function PostList({
   posts,
   showCircle = true,
@@ -34,7 +39,7 @@ export function PostList({
 }) {
   if (posts.length === 0) {
     return (
-      <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+      <p className="px-5 py-12 text-center text-sm text-muted-foreground">
         {emptyText}
       </p>
     )
@@ -43,90 +48,76 @@ export function PostList({
     <ul>
       {posts.map((post) => {
         const key = post.templateKey as TemplateKey
-        const excerpt = postExcerpt(key, post.fields)
+        const excerpt = postExcerpt(key, post.fields, 160)
         const isSecondhand = key === 'secondhand'
+        const byTool = !post.authorId
+        const author = byTool
+          ? { href: `/tools/${post.toolSlug}`, name: post.toolName ?? '工具' }
+          : { href: `/u/${post.authorId}`, name: post.authorName ?? '已注销用户' }
         return (
-          <li key={post.id} className="flex gap-3 border-b px-4 py-4 last:border-b-0">
-            {post.authorId ? (
-              <Link href={`/u/${post.authorId}`} className="mt-0.5">
-                <Avatar seed={post.authorId} size={36} />
+          <li key={post.id} className="border-b last:border-b-0">
+            <article className="flex gap-3 px-5 py-4 transition-colors hover:bg-hover">
+              <Link href={author.href} className="mt-0.5">
+                <Avatar
+                  seed={byTool ? `tool:${post.toolSlug}` : post.authorId!}
+                  name={author.name}
+                  size={40}
+                  shape={byTool ? 'square' : 'circle'}
+                />
               </Link>
-            ) : (
-              <Link href={`/tools/${post.toolSlug}`} className="mt-0.5">
-                <Avatar seed={`tool:${post.toolSlug}`} size={36} className="rounded-lg" />
-              </Link>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground">
-                {post.authorId ? (
-                  <Link
-                    href={`/u/${post.authorId}`}
-                    className="font-medium text-foreground hover:underline"
-                  >
-                    {post.authorName}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-1.5 text-[13px] leading-5 text-muted-foreground">
+                  <Link href={author.href} className="text-sm font-semibold text-foreground hover:underline">
+                    {author.name}
                   </Link>
-                ) : (
-                  <Link href={`/tools/${post.toolSlug}`} className="font-medium text-foreground hover:underline">
-                    {post.toolName}
+                  {post.toolName && (
+                    <Badge variant="outline">{byTool ? '工具' : `经 ${post.toolName}`}</Badge>
+                  )}
+                  {showCircle && (
+                    <>
+                      <span aria-hidden>·</span>
+                      <Link href={`/c/${post.circleId}`} className="hover:text-foreground hover:underline">
+                        {post.circleName}
+                      </Link>
+                    </>
+                  )}
+                  <span aria-hidden>·</span>
+                  <time dateTime={post.createdAt}>{timeAgo(post.createdAt)}</time>
+                </div>
+
+                <Link
+                  href={`/p/${post.id}`}
+                  className="mt-1 block text-[17px] font-semibold leading-snug hover:underline"
+                >
+                  {post.title}
+                </Link>
+
+                {excerpt && (
+                  <p className="mt-1.5 line-clamp-3 text-[15px] leading-6 text-foreground-2">
+                    {excerpt}
+                  </p>
+                )}
+
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-muted-foreground">
+                  {isSecondhand && (
+                    <span className="text-[15px] font-semibold text-brand">
+                      {formatPrice(Number(post.fields.priceFen ?? 0))}
+                    </span>
+                  )}
+                  {isSecondhand && <PostStatusBadge status={post.status} />}
+                  <Link href={`/p/${post.id}`} className="inline-flex items-center gap-1 hover:text-foreground">
+                    <MessageSquare className="size-4" aria-hidden />
+                    {post.commentCount > 0 ? post.commentCount : '回复'}
                   </Link>
-                )}
-                {post.toolName && (
-                  <Badge variant="outline" className="rounded-sm">
-                    {post.authorId ? `经 ${post.toolName}` : '工具'}
-                  </Badge>
-                )}
-                {showCircle && (
-                  <>
-                    <span aria-hidden>·</span>
-                    <Link
-                      href={`/c/${post.circleId}`}
-                      className="hover:text-foreground hover:underline"
-                    >
-                      {post.circleName}
-                    </Link>
-                  </>
-                )}
-                <span aria-hidden>·</span>
-                <time dateTime={post.createdAt}>{timeAgo(post.createdAt)}</time>
+                  {isSecondhand && (
+                    <span className="inline-flex items-center gap-1">
+                      <Handshake className="size-4" aria-hidden />
+                      {post.responseCount} 应答
+                    </span>
+                  )}
+                </div>
               </div>
-
-              <Link
-                href={`/p/${post.id}`}
-                className="mt-1 block text-[16px] font-medium leading-snug hover:underline"
-              >
-                {post.title}
-              </Link>
-
-              {excerpt && (
-                <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-                  {excerpt}
-                </p>
-              )}
-
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
-                {isSecondhand && (
-                  <span className="font-medium text-primary">
-                    {formatPrice(Number(post.fields.priceFen ?? 0))}
-                  </span>
-                )}
-                {isSecondhand && <PostStatusBadge status={post.status} />}
-                <span className="inline-flex items-center gap-1">
-                  <MessageSquare className="size-3.5" aria-hidden />
-                  {post.commentCount}
-                </span>
-                {isSecondhand && (
-                  <span className="inline-flex items-center gap-1">
-                    <Handshake className="size-3.5" aria-hidden />
-                    {post.responseCount} 应答
-                  </span>
-                )}
-                {isSecondhand && (
-                  <Badge variant="outline" className="rounded-sm">
-                    二手
-                  </Badge>
-                )}
-              </div>
-            </div>
+            </article>
           </li>
         )
       })}

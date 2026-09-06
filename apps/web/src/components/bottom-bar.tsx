@@ -23,17 +23,17 @@ export function BottomBar() {
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background md:hidden">
       <ul className="grid h-14 grid-cols-5">
         {items.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href
+          const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (
             <li key={href}>
               <Link
                 href={href}
                 className={cn(
                   'flex h-full flex-col items-center justify-center gap-0.5 text-[11px]',
-                  active ? 'text-foreground' : 'text-muted-foreground',
+                  active ? 'font-medium text-foreground' : 'text-muted-foreground',
                 )}
               >
-                <Icon className="size-5" aria-hidden />
+                <Icon className={cn('size-5', active && 'text-brand')} aria-hidden />
                 {label}
               </Link>
             </li>

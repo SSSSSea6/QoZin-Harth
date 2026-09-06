@@ -120,11 +120,11 @@ function CirclePage() {
         }
       >
         <Panel padded={false}>
-          <div className="flex gap-4 px-4 py-4">
-            <Avatar seed={circle.id} size={56} className="rounded-lg" />
+          <div className="flex gap-4 px-5 py-4">
+            <Avatar seed={circle.id} name={circle.name} size={64} shape="square" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-xl font-semibold">{circle.name}</h1>
+                <h1 className="truncate text-[22px] font-semibold leading-tight">{circle.name}</h1>
                 {circle.isOfficial && (
                   <Badge variant="secondary" className="rounded-sm">
                     官方
@@ -136,7 +136,7 @@ function CirclePage() {
                   </Badge>
                 )}
               </div>
-              <p className="mt-1 text-[13px] text-muted-foreground">
+              <p className="mt-1.5 text-[13px] text-muted-foreground">
                 {circle.memberCount} 成员
                 {circle.depth ? ` · ${LAYER_NAMES[circle.depth]}` : ''}
                 {circle.dormancyDays === null
@@ -169,12 +169,12 @@ function CirclePage() {
           </div>
 
           {hibernating && (
-            <div className="border-t border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-300">
+            <div className="border-t border-amber-500/30 bg-amber-500/10 px-5 py-2 text-sm text-amber-300">
               好久没动静了，{daysUntil(circle.lifecycle.deadline!)}将安静熄灭。任何成员添一把柴就能续上。
             </div>
           )}
           {archived && (
-            <div className="border-t bg-muted px-4 py-2 text-sm text-muted-foreground">
+            <div className="border-t bg-muted px-5 py-2 text-sm text-muted-foreground">
               这堆火已经熄了。内容保留，只读。
             </div>
           )}
@@ -182,7 +182,7 @@ function CirclePage() {
           {isMember && (
             <TabsList
               variant="line"
-              className="h-11 w-full justify-start gap-5 border-t px-4"
+              className="h-11 w-full justify-start gap-5 border-t px-5"
             >
               <TabsTrigger value="posts" className="flex-none px-0.5 text-[15px]">
                 帖子
@@ -416,7 +416,7 @@ function CirclePosts({ circleId }: { circleId: string }) {
   }, [circleId])
 
   if (posts === null) {
-    return <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>
+    return <p className="px-5 py-6 text-sm text-muted-foreground">加载中…</p>
   }
   return (
     <PostList
@@ -472,7 +472,7 @@ function SecondhandTab({
 
   return (
     <Panel padded={false}>
-      <div className="flex items-center justify-between border-b px-4 py-2.5">
+      <div className="flex items-center justify-between border-b px-5 py-2.5">
         <span className="text-[13px] text-muted-foreground">
           {posts?.length ?? 0} 条闲置
         </span>
@@ -488,7 +488,7 @@ function SecondhandTab({
         )}
       </div>
       {posts === null ? (
-        <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>
+        <p className="px-5 py-6 text-sm text-muted-foreground">加载中…</p>
       ) : (
         <PostList
           posts={posts}
@@ -520,11 +520,11 @@ function ChildrenTab({ circleId }: { circleId: string }) {
   }, [circleId])
 
   if (children === null) {
-    return <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>
+    return <p className="px-5 py-6 text-sm text-muted-foreground">加载中…</p>
   }
   if (children.length === 0) {
     return (
-      <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+      <p className="px-5 py-10 text-center text-sm text-muted-foreground">
         这个圈子下面还没有小圈。去点第一堆火？
       </p>
     )
@@ -535,9 +535,9 @@ function ChildrenTab({ circleId }: { circleId: string }) {
         <li key={child.id} className="border-b last:border-b-0">
           <Link
             href={`/c/${child.id}`}
-            className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40"
+            className="flex items-center gap-3 px-5 py-3 hover:bg-hover"
           >
-            <Avatar seed={child.id} size={36} />
+            <Avatar seed={child.id} name={child.name} size={40} shape="square" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-[15px] font-medium">
@@ -655,18 +655,18 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
   }
 
   if (tools === null && !error) {
-    return <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>
+    return <p className="px-5 py-6 text-sm text-muted-foreground">加载中…</p>
   }
 
   return (
     <>
-      {error && <p className="px-4 py-3 text-sm text-destructive">{error}</p>}
+      {error && <p className="px-5 py-3 text-sm text-destructive">{error}</p>}
       {dev && (
         <Link
           href={`/c/${circle.id}/t/${dev.slug}`}
-          className="flex items-center gap-3 border-b bg-amber-500/10 px-4 py-3 hover:bg-amber-500/15"
+          className="flex items-center gap-3 border-b bg-amber-500/10 px-5 py-3 hover:bg-amber-500/15"
         >
-          <Avatar seed={`tool:${dev.slug}`} size={36} className="rounded-lg" />
+          <Avatar seed={`tool:${dev.slug}`} name={dev.name} size={40} shape="square" />
           <div className="min-w-0 flex-1">
             <span className="block truncate text-[15px] font-medium">{dev.name}</span>
             <span className="text-xs text-muted-foreground">本地开发中，只有你能看到</span>
@@ -674,7 +674,7 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
         </Link>
       )}
       {tools && tools.length === 0 && !dev && (
-        <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
+        <div className="flex flex-col items-center gap-2 px-5 py-10 text-center text-sm text-muted-foreground">
           <p>这个圈还没装工具。</p>
           {isOwner && (
             <Link href="/tools" className="text-foreground underline">
@@ -686,9 +686,9 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
       <ul>
         {tools?.map((tool) => (
           <li key={tool.slug} className="border-b last:border-b-0">
-            <div className="flex items-center gap-3 px-4 py-3">
+            <div className="flex items-center gap-3 px-5 py-3">
               <Link href={`/c/${circle.id}/t/${tool.slug}`}>
-                <Avatar seed={`tool:${tool.slug}`} size={36} className="rounded-lg" />
+                <Avatar seed={`tool:${tool.slug}`} name={tool.name} size={40} shape="square" />
               </Link>
               <div className="min-w-0 flex-1">
                 <Link
@@ -723,7 +723,7 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
               )}
             </div>
             {isOwner && tool.needsConfirm && (
-              <div className="flex flex-wrap items-center gap-3 border-t bg-amber-500/10 px-4 py-2.5 text-sm">
+              <div className="flex flex-wrap items-center gap-3 border-t bg-amber-500/10 px-5 py-2.5 text-sm">
                 <span className="min-w-0 flex-1">
                   新版本改了权限或时间表：
                   {tool.pending.scopes.map((scope) => TOOL_SCOPES[scope]).join('、')}
@@ -740,7 +740,7 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
         ))}
       </ul>
       {tools && tools.length > 0 && isOwner && (
-        <div className="border-t px-4 py-2.5">
+        <div className="border-t px-5 py-2.5">
           <Link href="/tools" className="text-xs text-muted-foreground hover:text-foreground">
             去工具市场找更多
           </Link>
@@ -765,13 +765,13 @@ function ToolRuns({ circleId, slug }: { circleId: string; slug: string }) {
 
   useLoad(load)
 
-  if (error) return <p className="border-t px-4 py-3 text-sm text-destructive">{error}</p>
-  if (runs === null) return <p className="border-t px-4 py-3 text-sm text-muted-foreground">加载中…</p>
-  if (runs.length === 0) return <p className="border-t px-4 py-3 text-sm text-muted-foreground">还没有运行过。</p>
+  if (error) return <p className="border-t px-5 py-3 text-sm text-destructive">{error}</p>
+  if (runs === null) return <p className="border-t px-5 py-3 text-sm text-muted-foreground">加载中…</p>
+  if (runs.length === 0) return <p className="border-t px-5 py-3 text-sm text-muted-foreground">还没有运行过。</p>
   return (
     <ul className="border-t">
       {runs.map((run) => (
-        <li key={run.id} className="border-b px-4 py-2 text-sm last:border-b-0">
+        <li key={run.id} className="border-b px-5 py-2 text-sm last:border-b-0">
           <div className="flex flex-wrap items-center gap-x-2 text-[13px]">
             <span className={run.status === 'ok' ? '' : run.status === 'queued' || run.status === 'running' ? 'text-muted-foreground' : 'text-destructive'}>
               {RUN_STATUS_LABEL[run.status] ?? run.status}
@@ -807,7 +807,7 @@ function MemberList({ circleId, myId }: { circleId: string; myId: string }) {
   }, [circleId])
 
   if (members === null) {
-    return <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>
+    return <p className="px-5 py-6 text-sm text-muted-foreground">加载中…</p>
   }
 
   return (
@@ -815,10 +815,10 @@ function MemberList({ circleId, myId }: { circleId: string; myId: string }) {
       {members.map((member) => (
         <li
           key={member.id}
-          className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0"
+          className="flex items-center gap-3 border-b px-5 py-3 last:border-b-0"
         >
           <Link href={`/u/${member.id}`}>
-            <Avatar seed={member.id} size={36} />
+            <Avatar seed={member.id} name={member.name} size={40} />
           </Link>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -910,8 +910,8 @@ function DmPage({
   return (
     <div className="mx-auto w-full max-w-2xl">
       <Panel padded={false}>
-        <div className="flex items-center gap-3 border-b px-4 py-3">
-          {circle.peerId && <Avatar seed={circle.peerId} size={36} />}
+        <div className="flex items-center gap-3 border-b px-5 py-3">
+          {circle.peerId && <Avatar seed={circle.peerId} name={circle.name} size={40} />}
           <div className="min-w-0 flex-1">
             <Link
               href={circle.peerId ? `/u/${circle.peerId}` : '#'}
@@ -936,7 +936,7 @@ function DmPage({
           )}
         </div>
 
-        <div className="flex min-h-[320px] flex-col gap-4 px-4 py-4">
+        <div className="flex min-h-[320px] flex-col gap-4 px-5 py-4">
           {messages === null ? (
             <p className="text-sm text-muted-foreground">加载中…</p>
           ) : messages.length === 0 ? (
@@ -947,7 +947,7 @@ function DmPage({
             <ul className="flex flex-col gap-4">
               {messages.map((m) => (
                 <li key={m.id} className="flex gap-3">
-                  <Avatar seed={m.authorId} size={32} />
+                  <Avatar seed={m.authorId} name={m.authorName} size={32} />
                   <div className="min-w-0 flex-1 text-sm">
                     <div className="flex items-baseline gap-2">
                       <span className="font-medium">{m.authorName}</span>
@@ -966,11 +966,11 @@ function DmPage({
         </div>
 
         {archived ? (
-          <div className="border-t bg-muted px-4 py-2 text-sm text-muted-foreground">
+          <div className="border-t bg-muted px-5 py-2 text-sm text-muted-foreground">
             这段对话已经安静散场，只读。
           </div>
         ) : (
-          <div className="flex flex-col gap-2 border-t px-4 py-3">
+          <div className="flex flex-col gap-2 border-t px-5 py-3">
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}

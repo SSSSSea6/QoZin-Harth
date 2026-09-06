@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { Avatar } from '@/components/avatar'
 import { Columns } from '@/components/columns'
-import { Panel } from '@/components/panel'
+import { Panel, PanelHeader } from '@/components/panel'
 import { PostStatusBadge } from '@/components/post-status'
 import { StarInput } from '@/components/stars'
 import { Badge } from '@/components/ui/badge'
@@ -102,14 +102,14 @@ export default function PostPage() {
           {post.circleName}
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold leading-snug">{post.title}</h1>
+          <h1 className="text-[22px] font-semibold leading-snug">{post.title}</h1>
           {isSecondhand && <PostStatusBadge status={post.status} />}
         </div>
         <div className="mt-3 flex items-center gap-2 text-[13px] text-muted-foreground">
           {post.author ? (
             <>
               <Link href={`/u/${post.author.id}`}>
-                <Avatar seed={post.author.id} size={28} />
+                <Avatar seed={post.author.id} name={post.author.name} size={32} />
               </Link>
               <Link
                 href={`/u/${post.author.id}`}
@@ -121,7 +121,7 @@ export default function PostPage() {
           ) : (
             <>
               <Link href={`/tools/${post.tool?.slug}`}>
-                <Avatar seed={`tool:${post.tool?.slug}`} size={28} className="rounded-md" />
+                <Avatar seed={`tool:${post.tool?.slug}`} name={post.tool?.name ?? '工具'} size={32} shape="square" />
               </Link>
               <Link href={`/tools/${post.tool?.slug}`} className="font-medium text-foreground hover:underline">
                 {post.tool?.name}
@@ -144,7 +144,7 @@ export default function PostPage() {
         )}
 
         {body && (
-          <p className="mt-4 whitespace-pre-wrap break-words text-[15px] leading-7">
+          <p className="mt-4 whitespace-pre-wrap break-words text-base leading-7">
             {body}
           </p>
         )}
@@ -204,7 +204,7 @@ function AuthorCard({ authorId, isSelf }: { authorId: string; isSelf: boolean })
     <Panel>
       <div className="flex items-center gap-3">
         <Link href={`/u/${profile.id}`}>
-          <Avatar seed={profile.id} size={48} />
+          <Avatar seed={profile.id} name={profile.name} size={48} />
         </Link>
         <div className="min-w-0 flex-1">
           <Link
@@ -273,22 +273,18 @@ function CommentsPanel({
 
   return (
     <Panel padded={false}>
-      <div className="border-b px-4 py-3">
-        <h2 className="text-[15px] font-semibold">
-          回复 {post.comments.length > 0 ? post.comments.length : ''}
-        </h2>
-      </div>
+      <PanelHeader as="h2" title="回复" description={post.comments.length > 0 ? `${post.comments.length} 条` : undefined} />
 
       {post.comments.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+        <p className="px-5 py-8 text-center text-sm text-muted-foreground">
           还没有回复。
         </p>
       ) : (
         <ul>
           {post.comments.map((c) => (
-            <li key={c.id} className="flex gap-3 border-b px-4 py-3 last:border-b-0">
+            <li key={c.id} className="flex gap-3 border-b px-5 py-3 last:border-b-0">
               <Link href={`/u/${c.authorId}`} className="mt-0.5">
-                <Avatar seed={c.authorId} size={32} />
+                <Avatar seed={c.authorId} name={c.authorName} size={32} />
               </Link>
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2 text-[13px]">
@@ -302,7 +298,7 @@ function CommentsPanel({
                     {timeAgo(c.createdAt)}
                   </span>
                 </div>
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                <p className="mt-1 whitespace-pre-wrap break-words text-[15px] leading-6 text-foreground-2">
                   {c.content}
                 </p>
               </div>
@@ -312,11 +308,11 @@ function CommentsPanel({
       )}
 
       {post.circleArchived ? (
-        <div className="border-t bg-muted px-4 py-2 text-sm text-muted-foreground">
+        <div className="border-t bg-muted px-5 py-2 text-sm text-muted-foreground">
           圈子已归档，不能再回复。
         </div>
       ) : (
-        <div className="flex flex-col gap-2 border-t px-4 py-3">
+        <div className="flex flex-col gap-2 border-t px-5 py-3">
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -355,7 +351,7 @@ function AuthorOpenView({
         <ul className="divide-y">
           {post.responses.map((r) => (
             <li key={r.id} className="flex items-start gap-3 py-3">
-              <Avatar seed={r.responderId} size={32} />
+              <Avatar seed={r.responderId} name={r.responderName} size={32} />
               <div className="min-w-0 flex-1 text-sm">
                 <span className="flex items-baseline gap-2">
                   <Link

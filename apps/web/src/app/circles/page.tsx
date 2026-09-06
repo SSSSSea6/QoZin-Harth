@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useCallback, useState } from 'react'
 import { Avatar } from '@/components/avatar'
 import { Columns } from '@/components/columns'
-import { Panel, PanelTitle } from '@/components/panel'
+import { ListSkeleton, Panel, PanelHeader, PanelTitle } from '@/components/panel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { api, errorText } from '@/lib/api'
@@ -76,24 +76,24 @@ export default function CirclesPage() {
       }
     >
       <Panel padded={false}>
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h1 className="text-[15px] font-semibold">我的圈子</h1>
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={<Link href="/circles/new" />}
-            className="xl:hidden"
-          >
-            <Plus aria-hidden /> 建圈
-          </Button>
-        </div>
-        {error && <p className="px-4 py-6 text-sm text-destructive">{error}</p>}
-        {mine === null && !error && (
-          <p className="px-4 py-6 text-sm text-muted-foreground">加载中…</p>
-        )}
+        <PanelHeader
+          title="我的圈子"
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={<Link href="/circles/new" />}
+              className="xl:hidden"
+            >
+              <Plus aria-hidden /> 建圈
+            </Button>
+          }
+        />
+        {error && <p className="px-5 py-6 text-sm text-destructive">{error}</p>}
+        {mine === null && !error && <ListSkeleton rows={3} />}
         {mine && groups.length === 0 && (
-          <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+          <p className="px-5 py-10 text-center text-sm text-muted-foreground">
             还没有圈子。先加入学校圈，或者自己点一堆火。
           </p>
         )}
@@ -102,9 +102,9 @@ export default function CirclesPage() {
             <li key={circle.id} className="border-b last:border-b-0">
               <Link
                 href={`/c/${circle.id}`}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40"
+                className="flex items-center gap-3 px-5 py-3 hover:bg-hover"
               >
-                <Avatar seed={circle.id} size={40} />
+                <Avatar seed={circle.id} name={circle.name} size={44} shape="square" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-[15px] font-medium">
@@ -148,17 +148,15 @@ export default function CirclesPage() {
 
       {dms.length > 0 && (
         <Panel padded={false}>
-          <div className="border-b px-4 py-3">
-            <h2 className="text-[15px] font-semibold">私聊</h2>
-          </div>
+          <PanelHeader as="h2" title="私聊" />
           <ul>
             {dms.map((circle) => (
               <li key={circle.id} className="border-b last:border-b-0">
                 <Link
                   href={`/c/${circle.id}`}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40"
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-hover"
                 >
-                  <Avatar seed={circle.id} size={36} />
+                  <Avatar seed={circle.id} name={circle.name} size={36} shape="square" />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
                     {circle.name}
                   </span>
@@ -174,16 +172,14 @@ export default function CirclesPage() {
 
       {unjoinedTop.length > 0 && (
         <Panel padded={false}>
-          <div className="border-b px-4 py-3">
-            <h2 className="text-[15px] font-semibold">身份圈</h2>
-          </div>
+          <PanelHeader as="h2" title="身份圈" />
           <ul>
             {unjoinedTop.map((circle) => (
               <li
                 key={circle.id}
-                className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0"
+                className="flex items-center gap-3 border-b px-5 py-3 last:border-b-0"
               >
-                <Avatar seed={circle.id} size={36} />
+                <Avatar seed={circle.id} name={circle.name} size={36} shape="square" />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">
                   {circle.name}
                 </span>

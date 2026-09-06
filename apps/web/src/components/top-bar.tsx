@@ -21,11 +21,10 @@ export function TopBar() {
           <img src="/wordmark.svg" alt="火塘" className="h-[18px] w-auto md:h-[22px] lg:h-6" />
         </Link>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5">
           {session ? (
             <>
               <Button
-                size="sm"
                 nativeButton={false}
                 render={<Link href="/posts/new" />}
                 className="hidden md:inline-flex"
@@ -34,16 +33,16 @@ export function TopBar() {
               </Button>
               <Link
                 href={`/u/${session.user.id}`}
-                className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted"
+                className="flex items-center gap-2 rounded-md py-1 pl-1.5 pr-2.5 hover:bg-hover"
               >
-                <Avatar seed={session.user.id} size={28} />
-                <span className="hidden text-sm md:inline">
+                <Avatar seed={session.user.id} name={session.user.name} size={30} />
+                <span className="hidden text-sm font-medium md:inline">
                   {session.user.name}
                 </span>
               </Link>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 aria-label="退出登录"
                 className="text-muted-foreground"
                 onClick={async () => {

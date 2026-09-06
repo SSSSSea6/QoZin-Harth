@@ -52,10 +52,10 @@ export default function ReviewQueuePage() {
     <Columns>
       <Panel padded={false}>
         <PanelHeader title="待审" description={data ? `${data.pending.length} 个版本` : undefined} />
-        {error && <p className="px-5 py-10 text-center text-sm text-muted-foreground">{error}</p>}
+        {error && <p className="px-4 py-10 md:px-5 text-center text-sm text-muted-foreground">{error}</p>}
         {data === null && !error && <ListSkeleton rows={2} />}
         {data && data.pending.length === 0 && (
-          <p className="px-5 py-10 text-center text-sm text-muted-foreground">没有待审的工具。</p>
+          <p className="px-4 py-10 md:px-5 text-center text-sm text-muted-foreground">没有待审的工具。</p>
         )}
         <ul>
           {data?.pending.map((item) => (
@@ -68,7 +68,7 @@ export default function ReviewQueuePage() {
         <Panel padded={false}>
           <PanelHeader as="h2" title="已处理" />
           {data.recent.length === 0 && (
-            <p className="px-5 py-10 text-center text-sm text-muted-foreground">还没有处理过的版本。</p>
+            <p className="px-4 py-10 md:px-5 text-center text-sm text-muted-foreground">还没有处理过的版本。</p>
           )}
           <ul>
             {data.recent.map((item) => (
@@ -93,7 +93,7 @@ function ReviewRow({ item }: { item: ReviewItem }) {
   const by = item.review?.decidedBy ? DECIDED_BY[item.review.decidedBy] : ''
   return (
     <li className="border-b last:border-b-0">
-      <Link href={`/tools/review/${item.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-hover">
+      <Link href={`/tools/review/${item.id}`} className="flex items-start gap-3 px-4 py-3 md:px-5 hover:bg-hover">
         <Avatar seed={`tool:${item.tool.slug}`} name={item.tool.name} size={44} shape="square" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

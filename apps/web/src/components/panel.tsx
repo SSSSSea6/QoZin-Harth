@@ -5,14 +5,17 @@ export function Panel({
   children,
   className,
   padded = true,
+  id,
 }: {
   children: ReactNode
   className?: string
   padded?: boolean
+  id?: string
 }) {
   return (
     <section
-      className={cn('rounded-lg border bg-card', padded && 'px-5 py-4', className)}
+      id={id}
+      className={cn('rounded-lg border bg-card', padded && 'px-4 py-4 md:px-5', className)}
     >
       {children}
     </section>
@@ -47,9 +50,9 @@ export function PanelHeader({
   as?: 'h1' | 'h2'
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b px-5 py-3.5">
+    <div className="flex min-h-14 items-center justify-between gap-3 border-b px-4 md:px-5">
       <div className="flex min-w-0 items-baseline gap-2">
-        <Heading className="text-base font-semibold">{title}</Heading>
+        <Heading className="text-xl font-semibold">{title}</Heading>
         {description && <span className="truncate text-[13px] text-muted-foreground">{description}</span>}
       </div>
       {action}
@@ -66,7 +69,7 @@ export function ListSkeleton({ rows = 4, avatar = true }: { rows?: number; avata
   return (
     <ul aria-hidden>
       {Array.from({ length: rows }, (_, i) => (
-        <li key={i} className="flex gap-3 border-b px-5 py-4 last:border-b-0">
+        <li key={i} className="flex gap-3 border-b px-4 py-4 last:border-b-0 md:px-5">
           {avatar && <Skeleton className="size-10 rounded-full" />}
           <div className="flex min-w-0 flex-1 flex-col gap-2 py-0.5">
             <Skeleton className="h-3.5 w-1/3" />

@@ -40,18 +40,18 @@ export function AuthForms({ next = '/' }: { next?: string }) {
 
   return (
     <Tabs defaultValue="login" onValueChange={() => setError('')}>
-      <TabsList className="w-full">
-        <TabsTrigger value="login" className="flex-1">
+      <TabsList variant="line" className="h-11 w-full justify-start gap-6 border-b">
+        <TabsTrigger value="login" className="flex-none px-0.5 text-[15px]">
           登录
         </TabsTrigger>
-        <TabsTrigger value="register" className="flex-1">
+        <TabsTrigger value="register" className="flex-none px-0.5 text-[15px]">
           注册
         </TabsTrigger>
       </TabsList>
 
       <TabsContent value="login">
         <form
-          className="flex flex-col gap-4 pt-4"
+          className="flex flex-col gap-5 pt-5"
           onSubmit={(e) => {
             e.preventDefault()
             const data = new FormData(e.currentTarget)
@@ -77,7 +77,7 @@ export function AuthForms({ next = '/' }: { next?: string }) {
             />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" size="lg" disabled={busy}>
             {busy ? '登录中…' : '登录'}
           </Button>
         </form>
@@ -85,7 +85,7 @@ export function AuthForms({ next = '/' }: { next?: string }) {
 
       <TabsContent value="register">
         <form
-          className="flex flex-col gap-4 pt-4"
+          className="flex flex-col gap-5 pt-5"
           onSubmit={(e) => {
             e.preventDefault()
             const data = new FormData(e.currentTarget)
@@ -118,7 +118,7 @@ export function AuthForms({ next = '/' }: { next?: string }) {
             <p className="text-xs text-muted-foreground">至少 8 位</p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" size="lg" disabled={busy}>
             {busy ? '注册中…' : '注册'}
           </Button>
         </form>

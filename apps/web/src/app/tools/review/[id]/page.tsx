@@ -401,7 +401,7 @@ function RunPanel({ versionId, circles }: { versionId: string; circles: RunCircl
       </Panel>
       {grant && (
         <Panel padded={false} className="overflow-hidden">
-          <div className="flex items-center gap-2 border-b px-5 py-2 text-sm">
+          <div className="flex items-center gap-2 border-b px-4 py-2 md:px-5 text-sm">
             <span className="font-medium">{grant.context.tool.name}</span>
             <span className="text-xs text-muted-foreground">在「{grant.context.circle.name}」里运行</span>
           </div>

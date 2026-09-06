@@ -11,6 +11,7 @@
   --color-foreground-2: var(--foreground-2);
   --color-brand: var(--brand);
   --color-hover: var(--hover);
+  --color-selected: var(--selected);
   --font-sans: system-ui, -apple-system, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", Consolas, "JetBrains Mono",
@@ -65,24 +66,25 @@ body {
   --background: oklch(0 0 0);
   --page: oklch(0 0 0);
   --foreground: oklch(0.95 0 0);
-  --foreground-2: oklch(0.78 0 0);
-  --card: oklch(0.115 0 0);
+  --foreground-2: oklch(0.83 0 0);
+  --card: oklch(0.16 0 0);
   --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.16 0 0);
+  --popover: oklch(0.2 0 0);
   --popover-foreground: oklch(0.95 0 0);
   --primary: oklch(1 0 0);
   --primary-foreground: oklch(0 0 0);
-  --secondary: oklch(0.22 0 0);
+  --secondary: oklch(0.24 0 0);
   --secondary-foreground: oklch(0.95 0 0);
   --muted: oklch(0.2 0 0);
   --muted-foreground: oklch(0.64 0 0);
-  --accent: oklch(0.2 0 0);
+  --accent: oklch(0.22 0 0);
   --accent-foreground: oklch(0.95 0 0);
-  --hover: oklch(1 0 0 / 4%);
+  --hover: oklch(1 0 0 / 5%);
+  --selected: oklch(1 0 0 / 9%);
   --brand: oklch(0.72 0.19 45);
   --destructive: oklch(0.7 0.19 22);
-  --border: oklch(0.24 0 0);
-  --input: oklch(0.3 0 0);
+  --border: oklch(0.27 0 0);
+  --input: oklch(0.47 0 0);
   --ring: oklch(0.72 0.19 45 / 50%);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
@@ -96,7 +98,7 @@ body {
   --sidebar-primary-foreground: oklch(0 0 0);
   --sidebar-accent: oklch(0.2 0 0);
   --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.24 0 0);
+  --sidebar-border: oklch(0.27 0 0);
   --sidebar-ring: oklch(0.5 0 0);
 }
 

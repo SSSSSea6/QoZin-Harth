@@ -20,7 +20,7 @@ export function BottomBar() {
   ]
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden">
       <ul className="grid h-14 grid-cols-5">
         {items.map(({ href, label, icon: Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
@@ -29,11 +29,11 @@ export function BottomBar() {
               <Link
                 href={href}
                 className={cn(
-                  'flex h-full flex-col items-center justify-center gap-0.5 text-[11px]',
+                  'flex h-full flex-col items-center justify-center gap-1 text-xs',
                   active ? 'font-medium text-foreground' : 'text-muted-foreground',
                 )}
               >
-                <Icon className={cn('size-5', active && 'text-brand')} aria-hidden />
+                <Icon className={cn('size-[22px]', active && 'text-brand')} aria-hidden />
                 {label}
               </Link>
             </li>

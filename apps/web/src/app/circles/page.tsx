@@ -90,10 +90,10 @@ export default function CirclesPage() {
             </Button>
           }
         />
-        {error && <p className="px-5 py-6 text-sm text-destructive">{error}</p>}
+        {error && <p className="px-4 py-6 md:px-5 text-sm text-destructive">{error}</p>}
         {mine === null && !error && <ListSkeleton rows={3} />}
         {mine && groups.length === 0 && (
-          <p className="px-5 py-10 text-center text-sm text-muted-foreground">
+          <p className="px-4 py-10 md:px-5 text-center text-sm text-muted-foreground">
             还没有圈子。先加入学校圈，或者自己点一堆火。
           </p>
         )}
@@ -102,7 +102,7 @@ export default function CirclesPage() {
             <li key={circle.id} className="border-b last:border-b-0">
               <Link
                 href={`/c/${circle.id}`}
-                className="flex items-center gap-3 px-5 py-3 hover:bg-hover"
+                className="flex items-center gap-3 px-4 py-3 md:px-5 hover:bg-hover"
               >
                 <Avatar seed={circle.id} name={circle.name} size={44} shape="square" />
                 <div className="min-w-0 flex-1">
@@ -154,7 +154,7 @@ export default function CirclesPage() {
               <li key={circle.id} className="border-b last:border-b-0">
                 <Link
                   href={`/c/${circle.id}`}
-                  className="flex items-center gap-3 px-5 py-3 hover:bg-hover"
+                  className="flex items-center gap-3 px-4 py-3 md:px-5 hover:bg-hover"
                 >
                   <Avatar seed={circle.id} name={circle.name} size={36} shape="square" />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
@@ -177,7 +177,7 @@ export default function CirclesPage() {
             {unjoinedTop.map((circle) => (
               <li
                 key={circle.id}
-                className="flex items-center gap-3 border-b px-5 py-3 last:border-b-0"
+                className="flex items-center gap-3 border-b px-4 py-3 md:px-5 last:border-b-0"
               >
                 <Avatar seed={circle.id} name={circle.name} size={36} shape="square" />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">

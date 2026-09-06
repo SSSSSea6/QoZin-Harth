@@ -105,30 +105,34 @@ export default function ProfilePage() {
           )}
         </div>
 
-        <dl className="mt-5 grid grid-cols-3 gap-4 border-t pt-4">
-          <div className="flex flex-col">
-            <dd className="text-xl font-semibold">
-              {reputation.avgRating === null
-                ? '—'
-                : reputation.avgRating.toFixed(1)}
-            </dd>
-            <dt className="text-xs text-muted-foreground">评分</dt>
-          </div>
-          <div className="flex flex-col">
-            <dd className="text-xl font-semibold">{reputation.reviewCount}</dd>
-            <dt className="text-xs text-muted-foreground">收到评价</dt>
-          </div>
-          <div className="flex flex-col">
-            <dd className="text-xl font-semibold">{reputation.completedCount}</dd>
-            <dt className="text-xs text-muted-foreground">完成交接</dt>
-          </div>
-        </dl>
+        <div className="mt-5 border-t pt-4">
+          <dl className="grid max-w-[360px] grid-cols-3 gap-4">
+            <div className="flex flex-col">
+              <dd className="text-2xl font-semibold leading-8">
+                {reputation.avgRating === null ? (
+                  <span className="text-base font-medium text-muted-foreground">暂无</span>
+                ) : (
+                  reputation.avgRating.toFixed(1)
+                )}
+              </dd>
+              <dt className="mt-1 text-[13px] text-muted-foreground">评分</dt>
+            </div>
+            <div className="flex flex-col">
+              <dd className="text-2xl font-semibold leading-8">{reputation.reviewCount}</dd>
+              <dt className="mt-1 text-[13px] text-muted-foreground">收到评价</dt>
+            </div>
+            <div className="flex flex-col">
+              <dd className="text-2xl font-semibold leading-8">{reputation.completedCount}</dd>
+              <dt className="mt-1 text-[13px] text-muted-foreground">完成交接</dt>
+            </div>
+          </dl>
+        </div>
       </Panel>
 
       <Panel padded={false}>
         <PanelHeader as="h2" title="大家怎么说" />
         {profile.recentReviews.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-muted-foreground">
+          <p className="px-4 py-8 md:px-5 text-center text-sm text-muted-foreground">
             还没有收到评价。完成第一次交接后会出现在这里。
           </p>
         ) : (
@@ -136,7 +140,7 @@ export default function ProfilePage() {
             {profile.recentReviews.map((review) => (
               <li
                 key={review.id}
-                className="flex flex-col gap-1 border-b px-5 py-3 text-sm last:border-b-0"
+                className="flex flex-col gap-1 border-b px-4 py-3 md:px-5 text-sm last:border-b-0"
               >
                 <div className="flex items-center gap-2">
                   <Stars rating={review.rating} />
@@ -152,17 +156,12 @@ export default function ProfilePage() {
           </ul>
         )}
       </Panel>
-
-      {isSelf && (
-        <div className="xl:hidden">
-          <AccountPanel email={session.user.email} />
-        </div>
-      )}
     </Columns>
   )
 }
 
 function AccountPanel({ email }: { email: string }) {
+  const router = useRouter()
   return (
     <Panel>
       <PanelTitle>账号</PanelTitle>
@@ -176,15 +175,30 @@ function AccountPanel({ email }: { email: string }) {
         >
           导出我的数据
         </Button>
-        <DeleteAccountDialog />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            await signOut()
+            router.replace('/')
+          }}
+        >
+          退出登录
+        </Button>
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-[13px] text-muted-foreground">
         数据怎么处理，见{' '}
-        <a href="https://github.com/SSSSSea6/QoZin-Harth/blob/main/PRIVACY.md" className="underline">
-          PRIVACY.md
+        <a
+          href="https://github.com/SSSSSea6/QoZin-Harth/blob/main/PRIVACY.md"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          隐私说明
         </a>
         。
       </p>
+      <div className="mt-6 border-t pt-4">
+        <DeleteAccountDialog />
+      </div>
     </Panel>
   )
 }

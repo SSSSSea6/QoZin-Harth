@@ -94,26 +94,26 @@ export default function PostPage() {
     <Columns
       aside={post.author ? <AuthorCard authorId={post.author.id} isSelf={post.isAuthor} /> : undefined}
     >
-      <Panel>
+      <Panel className="md:p-6">
         <Link
           href={`/c/${post.circleId}`}
           className="text-[13px] text-muted-foreground hover:text-foreground hover:underline"
         >
           {post.circleName}
         </Link>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h1 className="text-[22px] font-semibold leading-snug">{post.title}</h1>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <h1 className="text-[22px] font-semibold leading-8 md:text-2xl md:leading-[34px]">{post.title}</h1>
           {isSecondhand && <PostStatusBadge status={post.status} />}
         </div>
-        <div className="mt-3 flex items-center gap-2 text-[13px] text-muted-foreground">
+        <div className="mt-3 flex items-center gap-2.5 text-[13px] text-muted-foreground">
           {post.author ? (
             <>
               <Link href={`/u/${post.author.id}`}>
-                <Avatar seed={post.author.id} name={post.author.name} size={32} />
+                <Avatar seed={post.author.id} name={post.author.name} size={40} />
               </Link>
               <Link
                 href={`/u/${post.author.id}`}
-                className="font-medium text-foreground hover:underline"
+                className="text-sm font-semibold text-foreground hover:underline"
               >
                 {post.author.name}
               </Link>
@@ -121,30 +121,28 @@ export default function PostPage() {
           ) : (
             <>
               <Link href={`/tools/${post.tool?.slug}`}>
-                <Avatar seed={`tool:${post.tool?.slug}`} name={post.tool?.name ?? '工具'} size={32} shape="square" />
+                <Avatar seed={`tool:${post.tool?.slug}`} name={post.tool?.name ?? '工具'} size={40} shape="square" />
               </Link>
-              <Link href={`/tools/${post.tool?.slug}`} className="font-medium text-foreground hover:underline">
+              <Link href={`/tools/${post.tool?.slug}`} className="text-sm font-semibold text-foreground hover:underline">
                 {post.tool?.name}
               </Link>
             </>
           )}
           {post.tool && (
-            <Badge variant="outline" className="rounded-sm">
-              {post.author ? `经 ${post.tool.name}` : '工具'}
-            </Badge>
+            <Badge variant="outline">{post.author ? `经 ${post.tool.name}` : '工具'}</Badge>
           )}
           <span aria-hidden>·</span>
           <time dateTime={post.createdAt}>{timeAgo(post.createdAt)}</time>
         </div>
 
         {isSecondhand && (
-          <p className="mt-4 text-xl font-semibold text-primary">
+          <p className="mt-4 text-xl font-semibold text-brand">
             {formatPrice(Number(post.fields.priceFen ?? 0))}
           </p>
         )}
 
         {body && (
-          <p className="mt-4 whitespace-pre-wrap break-words text-base leading-7">
+          <p className="mt-5 whitespace-pre-wrap break-words text-base leading-7">
             {body}
           </p>
         )}
@@ -272,61 +270,58 @@ function CommentsPanel({
   }
 
   return (
-    <Panel padded={false}>
+    <Panel padded={false} id="comments" className="scroll-mt-20">
       <PanelHeader as="h2" title="回复" description={post.comments.length > 0 ? `${post.comments.length} 条` : undefined} />
 
+      {post.circleArchived ? (
+        <div className="border-b px-4 py-3 text-sm text-muted-foreground md:px-5">
+          圈子已归档，不能再回复。
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 border-b px-4 py-4 md:px-5">
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            maxLength={1000}
+            placeholder="写下你的回复…"
+          />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex justify-end">
+            <Button onClick={submit} disabled={busy || !draft.trim()}>
+              {busy ? '回复中…' : '回复'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {post.comments.length === 0 ? (
-        <p className="px-5 py-8 text-center text-sm text-muted-foreground">
+        <p className="px-4 py-8 text-center text-sm text-muted-foreground md:px-5">
           还没有回复。
         </p>
       ) : (
-        <ul>
+        <ul className="[&>li:last-child>*:last-child]:border-b-0">
           {post.comments.map((c) => (
-            <li key={c.id} className="flex gap-3 border-b px-5 py-3 last:border-b-0">
-              <Link href={`/u/${c.authorId}`} className="mt-0.5">
+            <li key={c.id} className="flex gap-3 px-4 md:px-5">
+              <Link href={`/u/${c.authorId}`} className="mt-4 shrink-0">
                 <Avatar seed={c.authorId} name={c.authorName} size={32} />
               </Link>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2 text-[13px]">
+              <div className="min-w-0 flex-1 border-b py-4">
+                <div className="flex items-baseline gap-2 text-[13px] text-muted-foreground">
                   <Link
                     href={`/u/${c.authorId}`}
-                    className="font-medium hover:underline"
+                    className="text-sm font-semibold text-foreground hover:underline"
                   >
                     {c.authorName}
                   </Link>
-                  <span className="text-muted-foreground">
-                    {timeAgo(c.createdAt)}
-                  </span>
+                  <time dateTime={c.createdAt}>{timeAgo(c.createdAt)}</time>
                 </div>
-                <p className="mt-1 whitespace-pre-wrap break-words text-[15px] leading-6 text-foreground-2">
+                <p className="mt-1 whitespace-pre-wrap break-words text-base leading-relaxed">
                   {c.content}
                 </p>
               </div>
             </li>
           ))}
         </ul>
-      )}
-
-      {post.circleArchived ? (
-        <div className="border-t bg-muted px-5 py-2 text-sm text-muted-foreground">
-          圈子已归档，不能再回复。
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2 border-t px-5 py-3">
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={3}
-            maxLength={1000}
-            placeholder="写下你的回复…"
-          />
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex justify-end">
-            <Button size="sm" onClick={submit} disabled={busy || !draft.trim()}>
-              回复
-            </Button>
-          </div>
-        </div>
       )}
     </Panel>
   )

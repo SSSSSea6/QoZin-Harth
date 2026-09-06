@@ -72,10 +72,10 @@ function NewPostPage() {
   if (pending || !session) return null
 
   return (
-    <div className="mx-auto w-full max-w-xl">
-      <Panel>
+    <div className="mx-auto w-full max-w-[800px]">
+      <Panel className="md:p-6">
         <form
-          className="flex flex-col gap-5"
+          className="flex max-w-[640px] flex-col gap-5"
           onSubmit={async (e) => {
             e.preventDefault()
             if (!circleId) return
@@ -108,7 +108,7 @@ function NewPostPage() {
             router.replace(`/p/${post.id}`)
           }}
         >
-          <h1 className="text-lg font-semibold">发帖</h1>
+          <h1 className="text-xl font-semibold">发帖</h1>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="circle">发到哪个圈</Label>
@@ -123,7 +123,7 @@ function NewPostPage() {
                 id="circle"
                 value={circleId}
                 onChange={(e) => setCircleId(e.target.value)}
-                className="h-9 rounded-lg border bg-background px-3 text-sm"
+                className="h-10 rounded-lg border border-input bg-background px-3 text-base"
               >
                 {circles.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -134,21 +134,21 @@ function NewPostPage() {
             )}
           </div>
 
-          <Tabs
-            value={activeTemplate}
-            onValueChange={(v) => setTemplate(v as TemplateChoice)}
-          >
-            <TabsList variant="line" className="h-9 justify-start gap-5">
-              <TabsTrigger value="discussion" className="flex-none px-0.5">
-                讨论
-              </TabsTrigger>
-              {enabled?.includes('secondhand') && (
-                <TabsTrigger value="secondhand" className="flex-none px-0.5">
+          {enabled?.includes('secondhand') && (
+            <Tabs
+              value={activeTemplate}
+              onValueChange={(v) => setTemplate(v as TemplateChoice)}
+            >
+              <TabsList variant="line" className="h-11 justify-start gap-6">
+                <TabsTrigger value="discussion" className="flex-none px-0.5 text-[15px]">
+                  讨论
+                </TabsTrigger>
+                <TabsTrigger value="secondhand" className="flex-none px-0.5 text-[15px]">
                   二手
                 </TabsTrigger>
-              )}
-            </TabsList>
-          </Tabs>
+              </TabsList>
+            </Tabs>
+          )}
 
           {activeTemplate === 'discussion' ? (
             <>
@@ -161,9 +161,9 @@ function NewPostPage() {
                 <Textarea
                   id="body"
                   name="body"
-                  rows={8}
                   maxLength={5000}
                   placeholder="想说什么就写什么（选填）"
+                  className="max-h-[480px] min-h-[200px] md:min-h-[240px]"
                 />
               </div>
             </>
@@ -184,9 +184,9 @@ function NewPostPage() {
                 <Textarea
                   id="description"
                   name="description"
-                  rows={4}
                   maxLength={2000}
                   placeholder="成色、交接时间地点等（选填）"
+                  className="max-h-[480px] min-h-[120px]"
                 />
               </div>
               <fieldset className="flex flex-col gap-2">
@@ -230,12 +230,12 @@ function NewPostPage() {
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex gap-2">
-            <Button type="submit" disabled={busy || !circleId}>
-              {busy ? '发布中…' : '发布'}
-            </Button>
+          <div className="flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               取消
+            </Button>
+            <Button type="submit" className="min-w-[88px]" disabled={busy || !circleId}>
+              {busy ? '发布中…' : '发布'}
             </Button>
           </div>
         </form>

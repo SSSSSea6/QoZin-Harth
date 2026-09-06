@@ -35,14 +35,15 @@ export default function ToolPage() {
   const { slug } = useParams<{ slug: string }>()
   const [tool, setTool] = useState<ToolDetail | null>(null)
   const [circles, setCircles] = useState<OwnedCircle[]>([])
-  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!session) return
     const res = await api.tools[':slug'].$get({ param: { slug } })
     if (!res.ok) {
-      setError(await errorText(res))
+      setLoadError(await errorText(res))
       return
     }
     const data = await res.json()
@@ -53,10 +54,10 @@ export default function ToolPage() {
   useLoad(load)
 
   if (pending || !session) return null
-  if (error) {
+  if (loadError) {
     return (
       <Panel>
-        <p className="py-8 text-center text-sm text-muted-foreground">{error}</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{loadError}</p>
       </Panel>
     )
   }
@@ -70,46 +71,48 @@ export default function ToolPage() {
 
   async function toggle(circle: OwnedCircle) {
     setBusy(circle.id)
-    setError('')
+    setActionError('')
     const res = circle.installed
       ? await api.circles[':id'].tools[':slug'].$delete({ param: { id: circle.id, slug } })
       : await api.circles[':id'].tools[':slug'].$post({ param: { id: circle.id, slug } })
     setBusy(null)
     if (!res.ok) {
-      setError(await errorText(res))
+      setActionError(await errorText(res))
       return
     }
     void load()
   }
+
+  const meta = [
+    `v${tool.version}`,
+    tool.updatedAt ? `更新于 ${timeAgo(tool.updatedAt)}` : '',
+    tool.isMine ? '这是你发布的' : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <Columns
       aside={
         <Panel>
           <PanelTitle>安装到圈子</PanelTitle>
-          <InstallList circles={circles} busy={busy} onToggle={toggle} />
+          <InstallList circles={circles} slug={slug} busy={busy} error={actionError} onToggle={toggle} />
         </Panel>
       }
     >
-      <Panel>
+      <Panel className="md:p-6">
         <div className="flex gap-4">
-          <Avatar seed={`tool:${tool.slug}`} name={tool.name} size={64} shape="square" />
+          <Avatar seed={`tool:${tool.slug}`} name={tool.name} size={56} shape="square" />
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-[22px] font-semibold leading-tight">{tool.name}</h1>
-              <span className="font-mono text-xs text-muted-foreground">v{tool.version}</span>
-            </div>
+            <h1 className="text-[22px] font-semibold leading-tight md:text-2xl">{tool.name}</h1>
             <p className="mt-1.5 text-[15px] leading-6 text-foreground-2">{tool.description}</p>
-            <p className="mt-1 text-[13px] text-muted-foreground">
-              {tool.updatedAt ? `更新于 ${timeAgo(tool.updatedAt)}` : ''}
-              {tool.isMine ? ' · 这是你发布的' : ''}
-            </p>
+            <p className="mt-1.5 text-[13px] text-muted-foreground">{meta}</p>
           </div>
         </div>
 
-        <div className="mt-5 border-t pt-4">
-          <h2 className="text-sm font-medium">安装后它能</h2>
-          <ul className="mt-2 flex flex-col gap-1 text-sm">
+        <div className="mt-6 border-t pt-5">
+          <h2 className="text-sm font-semibold">安装后它能</h2>
+          <ul className="mt-2 flex flex-col gap-2 text-[15px] leading-6">
             {tool.permissions.map((scope) => (
               <li key={scope} className="flex gap-2">
                 <span className="text-muted-foreground">·</span>
@@ -117,8 +120,15 @@ export default function ToolPage() {
               </li>
             ))}
           </ul>
-          {tool.schedules.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1 text-sm">
+          {tool.hasBackend && (
+            <p className="mt-2 text-[13px] text-muted-foreground">它的后端代码在平台沙箱里运行，没有网络。</p>
+          )}
+        </div>
+
+        {tool.schedules.length > 0 && (
+          <div className="mt-6">
+            <h2 className="text-sm font-semibold">定时运行</h2>
+            <ul className="mt-2 flex flex-col gap-2 text-[15px] leading-6">
               {tool.schedules.map((schedule) => (
                 <li key={schedule.name} className="flex gap-2">
                   <span className="text-muted-foreground">·</span>
@@ -126,31 +136,24 @@ export default function ToolPage() {
                 </li>
               ))}
             </ul>
-          )}
-          <p className="mt-2 text-xs text-muted-foreground">
-            没有列出的它做不了；工具的数据按圈隔离，卸载即清空。
-            {tool.hasBackend ? '它的后端代码在平台沙箱里运行，没有网络。' : ''}
-          </p>
-        </div>
+          </div>
+        )}
       </Panel>
-
-      <div className="xl:hidden">
-        <Panel>
-          <PanelTitle>安装到圈子</PanelTitle>
-          <InstallList circles={circles} busy={busy} onToggle={toggle} />
-        </Panel>
-      </div>
     </Columns>
   )
 }
 
 function InstallList({
   circles,
+  slug,
   busy,
+  error,
   onToggle,
 }: {
   circles: OwnedCircle[]
+  slug: string
   busy: string | null
+  error: string
   onToggle: (circle: OwnedCircle) => void
 }) {
   if (circles.length === 0) {
@@ -165,21 +168,47 @@ function InstallList({
     )
   }
   return (
-    <ul className="flex flex-col gap-3">
-      {circles.map((circle) => (
-        <li key={circle.id} className="flex items-center gap-3">
-          <Avatar seed={circle.id} name={circle.name} size={28} shape="square" />
-          <span className="min-w-0 flex-1 truncate text-sm">{circle.name}</span>
-          <Button
-            size="sm"
-            variant={circle.installed ? 'outline' : 'default'}
-            disabled={busy === circle.id}
-            onClick={() => onToggle(circle)}
-          >
-            {circle.installed ? '卸载' : '安装'}
-          </Button>
-        </li>
-      ))}
-    </ul>
+    <div>
+      <ul className="flex flex-col">
+        {circles.map((circle) => (
+          <li key={circle.id} className="flex min-h-14 items-center gap-3 border-b py-2 last:border-b-0">
+            <Avatar seed={circle.id} name={circle.name} size={32} shape="square" />
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{circle.name}</span>
+              {circle.installed && <span className="block text-xs text-muted-foreground">已安装</span>}
+            </div>
+            {circle.installed ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  nativeButton={false}
+                  render={<Link href={`/c/${circle.id}/t/${slug}`} />}
+                >
+                  打开
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  disabled={busy === circle.id}
+                  onClick={() => onToggle(circle)}
+                >
+                  {busy === circle.id ? '卸载中…' : '卸载'}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" disabled={busy === circle.id} onClick={() => onToggle(circle)}>
+                {busy === circle.id ? '安装中…' : '安装'}
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {error && <p className="mt-2 text-[13px] text-destructive">{error}</p>}
+      <p className="mt-3 text-[13px] leading-5 text-foreground-2">
+        没有列出的它做不了；工具的数据按圈隔离，卸载就清空那个圈里的数据。
+      </p>
+    </div>
   )
 }

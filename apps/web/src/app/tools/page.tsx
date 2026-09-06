@@ -37,53 +37,36 @@ export default function ToolsPage() {
   if (pending || !session) return null
 
   return (
-    <Columns
-      aside={
-        <Panel>
-          <PanelTitle>做一个工具</PanelTitle>
-          <p className="text-sm text-muted-foreground">
-            一个页面加几行代码，就能跑在任何圈子里。
-          </p>
-          <pre className="mt-3 overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs leading-6">
-            {'npm i -g harth\nharth login\nharth init\nharth dev\nharth publish'}
-          </pre>
-          <Link href="/tools/mine" className="mt-3 block text-sm hover:underline">
-            我发布的工具
-          </Link>
-        </Panel>
-      }
-    >
+    <Columns aside={<DevPanel />}>
       <Panel padded={false}>
         <PanelHeader
           title="工具"
-          description="圈主装进圈里，成员直接用"
           action={
-            <Link href="/tools/mine" className="text-xs text-muted-foreground hover:text-foreground xl:hidden">
+            <Link href="/tools/mine" className="text-[13px] text-muted-foreground hover:text-foreground">
               我发布的
             </Link>
           }
         />
-        {error && <p className="px-5 py-6 text-sm text-destructive">{error}</p>}
+        {error && <p className="px-4 py-6 text-sm text-destructive md:px-5">{error}</p>}
         {tools === null && !error && <ListSkeleton rows={3} />}
         {tools && tools.length === 0 && (
-          <p className="px-5 py-10 text-center text-sm text-muted-foreground">还没有上架的工具。</p>
+          <p className="px-4 py-10 text-center text-sm text-muted-foreground md:px-5">还没有上架的工具。</p>
         )}
         <ul>
           {tools?.map((tool) => (
             <li key={tool.slug} className="border-b last:border-b-0">
-              <Link href={`/tools/${tool.slug}`} className="flex items-start gap-3 px-5 py-3 hover:bg-hover">
-                <Avatar seed={`tool:${tool.slug}`} name={tool.name} size={44} shape="square" />
+              <Link
+                href={`/tools/${tool.slug}`}
+                className="flex items-start gap-3 px-4 py-4 transition-colors hover:bg-hover md:px-5"
+              >
+                <Avatar seed={`tool:${tool.slug}`} name={tool.name} size={48} shape="square" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-base font-semibold">{tool.name}</span>
-                    <span className="font-mono text-xs text-muted-foreground">v{tool.version}</span>
-                  </div>
-                  <p className="mt-0.5 line-clamp-2 text-sm text-foreground-2">{tool.description}</p>
-                  {tool.updatedAt && (
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      更新于 {timeAgo(tool.updatedAt)}
-                    </span>
-                  )}
+                  <span className="block truncate text-base font-semibold">{tool.name}</span>
+                  <p className="mt-0.5 line-clamp-2 text-[15px] leading-6 text-foreground-2">{tool.description}</p>
+                  <span className="mt-1.5 block text-[13px] text-muted-foreground">
+                    v{tool.version}
+                    {tool.updatedAt ? ` · 更新于 ${timeAgo(tool.updatedAt)}` : ''}
+                  </span>
                 </div>
               </Link>
             </li>
@@ -91,5 +74,22 @@ export default function ToolsPage() {
         </ul>
       </Panel>
     </Columns>
+  )
+}
+
+function DevPanel() {
+  return (
+    <Panel>
+      <PanelTitle>做一个工具</PanelTitle>
+      <p className="text-sm leading-6 text-foreground-2">一个页面加几行代码，就能跑在任何圈子里。</p>
+      <details className="mt-3">
+        <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+          用命令行发布
+        </summary>
+        <pre className="mt-2 overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs leading-6">
+          {'npm i -g harth\nharth login\nharth init\nharth dev\nharth publish'}
+        </pre>
+      </details>
+    </Panel>
   )
 }

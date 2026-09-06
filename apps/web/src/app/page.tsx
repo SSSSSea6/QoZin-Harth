@@ -22,19 +22,19 @@ export default function Home() {
 
 function Landing() {
   return (
-    <div className="mx-auto flex max-w-sm flex-col gap-6 pt-10">
+    <div className="mx-auto flex w-full max-w-[400px] flex-col gap-6 pt-8 md:pt-16">
       <div className="flex flex-col items-center gap-3 text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="" width={96} height={96} className="size-20 rounded-2xl md:size-24 md:rounded-3xl" />
+        <img src="/logo.png" alt="" width={96} height={96} className="size-16 rounded-2xl md:size-20" />
         <h1>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/wordmark.svg" alt="火塘" className="h-10 w-auto md:h-12" />
+          <img src="/wordmark.svg" alt="火塘" className="h-8 w-auto md:h-10" />
         </h1>
         <p className="text-[15px] text-foreground-2">
           拼车、二手、组队，从身边的圈子开始。
         </p>
       </div>
-      <Panel>
+      <Panel className="md:p-6">
         <AuthForms />
       </Panel>
     </div>
@@ -110,8 +110,7 @@ function Feed() {
 
   const unjoinedTop = top.filter((c) => !c.joined)
   const dying = mine.filter((c) => c.lifecycle.state === 'hibernating')
-  const groups = mine.filter((c) => !c.isDm && c.lifecycle.state !== 'archived')
-  const hasCircles = groups.length > 0
+  const hasCircles = mine.some((c) => !c.isDm && c.lifecycle.state !== 'archived')
 
   return (
     <Columns
@@ -119,32 +118,33 @@ function Feed() {
         <>
           {unjoinedTop.length > 0 && <JoinTopCard circles={unjoinedTop} onJoined={load} />}
           {dying.length > 0 && <DyingCard circles={dying} onRenewed={load} />}
-          {groups.length > 0 && <MyCirclesCard circles={groups} />}
           {nearby.length > 0 && <NearbyCard circles={nearby} onJoined={load} />}
           {tools.length > 0 && <ToolsCard tools={tools} />}
         </>
       }
     >
       <Panel padded={false}>
-        <PanelHeader title="首页" description="你所在圈子的最新帖子" />
-        {error && <p className="px-5 py-6 text-sm text-destructive">{error}</p>}
+        <PanelHeader title="首页" />
+        {error && <p className="px-4 py-6 text-sm text-destructive md:px-5">{error}</p>}
         {posts === null && !error && <PostListSkeleton />}
         {posts && (
           <PostList
             posts={posts}
-            emptyText={
-              hasCircles
-                ? '你的圈子里还没有帖子。去发第一帖，让火旺起来。'
-                : '先加入一个圈子，这里就会有内容了。'
+            emptyText={hasCircles ? '圈子里还没有帖子。' : '还没有加入圈子。'}
+            emptyAction={
+              hasCircles ? (
+                <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/posts/new" />}>
+                  发第一帖
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/circles" />}>
+                  去找圈子
+                </Button>
+              )
             }
           />
         )}
       </Panel>
-      {!hasCircles && unjoinedTop.length > 0 && (
-        <div className="xl:hidden">
-          <JoinTopCard circles={unjoinedTop} onJoined={load} />
-        </div>
-      )}
     </Columns>
   )
 }
@@ -154,7 +154,7 @@ function JoinTopCard({ circles, onJoined }: { circles: TopCircle[]; onJoined: ()
     <Panel>
       <PanelTitle>身份圈</PanelTitle>
       <ul className="flex flex-col gap-3">
-        {circles.map((circle) => (
+        {circles.slice(0, 3).map((circle) => (
           <li key={circle.id} className="flex items-center gap-3">
             <Avatar seed={circle.id} name={circle.name} size={36} shape="square" />
             <span className="min-w-0 flex-1 truncate text-sm font-medium">{circle.name}</span>
@@ -199,35 +199,6 @@ function DyingCard({ circles, onRenewed }: { circles: MyCircle[]; onRenewed: () 
             >
               <Flame aria-hidden /> 添柴
             </Button>
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  )
-}
-
-function MyCirclesCard({ circles }: { circles: MyCircle[] }) {
-  return (
-    <Panel>
-      <PanelTitle
-        action={
-          <Link href="/circles" className="text-xs text-muted-foreground hover:text-foreground">
-            全部
-          </Link>
-        }
-      >
-        我的圈子
-      </PanelTitle>
-      <ul className="flex flex-col gap-2.5">
-        {circles.slice(0, 6).map((circle) => (
-          <li key={circle.id}>
-            <Link href={`/c/${circle.id}`} className="group flex items-center gap-3">
-              <Avatar seed={circle.id} name={circle.name} size={32} shape="square" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium group-hover:underline">{circle.name}</span>
-                <span className="block text-xs text-muted-foreground">最近活跃 {timeAgo(circle.lastActivityAt)}</span>
-              </span>
-            </Link>
           </li>
         ))}
       </ul>

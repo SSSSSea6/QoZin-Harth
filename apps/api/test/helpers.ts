@@ -50,3 +50,19 @@ export class TestUser {
     return (body as { user: { id: string } }).user.id
   }
 }
+
+// 管理员按用户 id 认，测试里注册后用钩子指定
+export async function becomeAdmin(user: TestUser, email: string): Promise<string> {
+  const id = await user.signUp(email)
+  const { status } = await user.post('/api/test/admin', { userId: id })
+  expect(status).toBe(200)
+  return id
+}
+
+// 走真实路径拿资格：管理员发码，开发者兑换
+export async function makeDeveloper(admin: TestUser, dev: TestUser): Promise<void> {
+  const issued = await admin.post<{ codes: string[] }>('/api/developers/invites', { count: 1 })
+  expect(issued.status).toBe(201)
+  const redeemed = await dev.post('/api/developers/redeem', { code: issued.body.codes[0] })
+  expect(redeemed.status).toBe(201)
+}

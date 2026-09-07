@@ -4,6 +4,9 @@ import { account, deviceCode, session, user } from '../db/auth-schema'
 import {
   circles,
   comments,
+  developerApplications,
+  developers,
+  fuelAccounts,
   memberships,
   messages,
   posts,
@@ -11,8 +14,10 @@ import {
   reviews,
   toolDevSessions,
   tools,
+  toolUsage,
   toolVersions,
 } from '../db/schema'
+import { closeDeveloperOnDeletion, myInvites } from './developers'
 
 export const DELETED_USER_NAME = '已注销用户'
 
@@ -76,6 +81,27 @@ export async function exportAccount(userId: string) {
       .where(eq(toolVersions.toolId, tool.id))
     toolList.push({ slug: tool.slug, name: tool.name, createdAt: tool.createdAt, versions })
   }
+  const [developer] = await db
+    .select({ source: developers.source, grantedAt: developers.grantedAt, revokedAt: developers.revokedAt, revokeReason: developers.revokeReason })
+    .from(developers)
+    .where(eq(developers.userId, userId))
+  const applications = await db
+    .select({
+      id: developerApplications.id,
+      message: developerApplications.message,
+      status: developerApplications.status,
+      note: developerApplications.note,
+      createdAt: developerApplications.createdAt,
+      decidedAt: developerApplications.decidedAt,
+    })
+    .from(developerApplications)
+    .where(eq(developerApplications.userId, userId))
+  const invites = await myInvites(userId)
+  const fuel = await db
+    .select({ month: fuelAccounts.month, used: fuelAccounts.used, storageBytes: fuelAccounts.storageBytes })
+    .from(fuelAccounts)
+    .where(eq(fuelAccounts.ownerId, userId))
+  const usage = await db.select().from(toolUsage).where(eq(toolUsage.ownerId, userId))
 
   return {
     exportedAt: new Date().toISOString(),
@@ -89,6 +115,11 @@ export async function exportAccount(userId: string) {
     reviewsGiven,
     reviewsReceived,
     tools: toolList,
+    developer: developer ?? null,
+    applications,
+    invites,
+    fuel,
+    usage,
   }
 }
 
@@ -136,6 +167,7 @@ export async function deleteAccount(userId: string): Promise<void> {
       .update(posts)
       .set({ status: 'cancelled' })
       .where(and(eq(posts.authorId, userId), inArray(posts.status, ['open', 'matched'])))
+    await closeDeveloperOnDeletion(tx, userId)
     await tx.delete(toolDevSessions).where(eq(toolDevSessions.userId, userId))
     await tx.delete(deviceCode).where(eq(deviceCode.userId, userId))
     await tx.delete(session).where(eq(session.userId, userId))

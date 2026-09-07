@@ -38,12 +38,22 @@ export function openPackage(zip: Uint8Array): ToolPackage {
   if (zip.byteLength > TOOL_PACKAGE_MAX_BYTES) {
     throw new PackageError(`包超过 ${TOOL_PACKAGE_MAX_BYTES / 1024 / 1024} MB`)
   }
+  // 解压前按条目声明的原始大小拦住炸弹，超限的条目不解压
+  let declared = 0
+  let tooBig = false
   let entries: Record<string, Uint8Array>
   try {
-    entries = unzipSync(zip)
+    entries = unzipSync(zip, {
+      filter: (file) => {
+        declared += file.originalSize
+        if (declared > TOOL_PACKAGE_MAX_BYTES) tooBig = true
+        return !tooBig
+      },
+    })
   } catch {
     throw new PackageError('不是有效的 zip 文件')
   }
+  if (tooBig) throw new PackageError('解压后体积超过上限')
   const files: Record<string, Uint8Array> = {}
   let total = 0
   for (const [rawName, data] of Object.entries(entries)) {

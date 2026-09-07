@@ -1,19 +1,22 @@
 'use client'
 
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
 import { Panel } from '@/components/panel'
 import { ToolFrame, type ToolGrant } from '@/components/tool-frame'
+import { Button } from '@/components/ui/button'
 import { api, errorText } from '@/lib/api'
 import { useLoad, useRequireSession } from '@/lib/hooks'
 
 export default function ToolHostPage() {
   const { session, pending } = useRequireSession()
   const { id, slug } = useParams<{ id: string; slug: string }>()
+  const router = useRouter()
   const [grant, setGrant] = useState<ToolGrant | null>(null)
   const [error, setError] = useState('')
+  const [feedbackError, setFeedbackError] = useState('')
 
   const mint = useCallback(async () => {
     const res = await api.circles[':id'].tools[':slug'].token.$post({ param: { id, slug } })
@@ -35,6 +38,20 @@ export default function ToolHostPage() {
 
   if (pending || !session) return null
 
+  // 自己的工具不给自己发消息；开发者已注销时接口不返回 developer
+  const developer = grant?.developer && grant.developer.id !== session.user.id ? grant.developer : null
+
+  async function feedback() {
+    if (!developer) return
+    setFeedbackError('')
+    const res = await api.circles.dm.$post({ json: { userId: developer.id } })
+    if (!res.ok) {
+      setFeedbackError(await errorText(res))
+      return
+    }
+    router.push(`/c/${(await res.json()).circle.id}`)
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
@@ -51,7 +68,13 @@ export default function ToolHostPage() {
             </span>
           </>
         )}
+        {developer && (
+          <Button size="sm" variant="outline" className="ml-auto" onClick={() => void feedback()}>
+            <MessageSquare aria-hidden /> 给 {developer.name} 反馈
+          </Button>
+        )}
       </div>
+      {feedbackError && <p className="text-sm text-destructive">{feedbackError}</p>}
 
       {error ? (
         <Panel>
@@ -62,7 +85,7 @@ export default function ToolHostPage() {
           {grant ? (
             <ToolFrame grant={grant} mint={mint} className="h-[calc(100vh-11rem)] min-h-[480px]" />
           ) : (
-            <p className="px-4 py-6 md:px-5 text-sm text-muted-foreground">加载中…</p>
+            <p className="px-4 py-6 text-sm text-muted-foreground md:px-5">加载中…</p>
           )}
         </Panel>
       )}

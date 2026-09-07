@@ -3,7 +3,7 @@ import { strFromU8 } from 'fflate'
 import { HTTPException } from 'hono/http-exception'
 import type { ToolManifest } from '@harth/shared'
 import { db } from '../db'
-import { tools, toolVersions } from '../db/schema'
+import { developers, tools, toolVersions } from '../db/schema'
 import { env } from '../env'
 import {
   isTextFile,
@@ -112,6 +112,7 @@ export async function publish(
   }
   const failed = checks.some((c) => !c.ok)
   const review: ReviewRecord = failed ? { checks, decidedBy: 'checks' } : { checks }
+  const packageBytes = Object.values(pkg.files).reduce((sum, data) => sum + data.byteLength, 0)
   const [version] = await db
     .insert(toolVersions)
     .values({
@@ -121,6 +122,7 @@ export async function publish(
       status: failed ? 'rejected' : 'pending',
       review,
       backendHash: hash,
+      packageBytes,
       reviewedAt: failed ? new Date() : null,
     })
     .returning()
@@ -129,7 +131,12 @@ export async function publish(
   return { tool, version: version! }
 }
 
+// 同一版本的 AI 审核同时只跑一次
+const reviewing = new Set<string>()
+
 async function runAiReview(versionId: string, pkg: ToolPackage): Promise<void> {
+  if (reviewing.has(versionId)) return
+  reviewing.add(versionId)
   try {
     const verdict = await aiReview(pkg)
     if (!verdict) return
@@ -143,7 +150,20 @@ async function runAiReview(versionId: string, pkg: ToolPackage): Promise<void> {
       .update(toolVersions)
       .set({ review: { ...review, error: err instanceof Error ? err.message : String(err) } })
       .where(eq(toolVersions.id, versionId))
+  } finally {
+    reviewing.delete(versionId)
   }
+}
+
+// 开发者资格已撤销的，AI 通过也不自动上架，留给管理员
+async function ownerRevoked(toolId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ revokedAt: developers.revokedAt })
+    .from(tools)
+    .innerJoin(developers, eq(developers.userId, tools.ownerId))
+    .where(eq(tools.id, toolId))
+    .limit(1)
+  return Boolean(row?.revokedAt)
 }
 
 async function applyAiVerdict(versionId: string, verdict: AiVerdict): Promise<void> {
@@ -154,7 +174,7 @@ async function applyAiVerdict(versionId: string, verdict: AiVerdict): Promise<vo
     ai: { ...verdict, model: env.REVIEW?.model ?? '' },
   }
   delete review.error
-  if (verdict.verdict === 'approve') {
+  if (verdict.verdict === 'approve' && !(await ownerRevoked(version.toolId))) {
     await approveVersion(version, { ...review, decidedBy: 'ai' })
   } else if (verdict.verdict === 'reject') {
     await rejectVersion(version, { ...review, decidedBy: 'ai' })

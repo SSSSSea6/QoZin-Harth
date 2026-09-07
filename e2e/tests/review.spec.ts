@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { API_URL } from '../playwright.config'
-import { adminSession, counterBundle, register, SCHOOL, uniqueName } from './helpers'
+import { adminSession, counterBundle, makeDeveloper, register, SCHOOL, uniqueName } from './helpers'
 
 test('审核页：待审 → 试运行 → 驳回 → 通过 → 下架；非管理员进不去', async ({ browser }) => {
   const devPage = await (await browser.newContext()).newPage()
@@ -16,10 +16,11 @@ test('审核页：待审 → 试运行 → 驳回 → 通过 → 下架；非管
     })
     expect(res.status()).toBe(201)
   }
-  await publishVersion('1.0.0')
 
   // 管理员登录并加入身份圈，试运行要在圈里进行；重试时可能已经加入
   await adminSession(adminPage.request)
+  await makeDeveloper(adminPage.request, devPage.request)
+  await publishVersion('1.0.0')
   const top = (await (await adminPage.request.get(`${API_URL}/api/circles/top`)).json()) as {
     circles: { id: string }[]
   }

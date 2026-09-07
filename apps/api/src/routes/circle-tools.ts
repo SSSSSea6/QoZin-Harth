@@ -7,9 +7,11 @@ import { z } from 'zod'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
 import { circleTools, toolDevSessions, toolRuns, tools, toolStorage, toolVersions } from '../db/schema'
+import { DELETED_USER_NAME } from '../domain/account'
 import { assertNotArchived, mustGetCircle, mustGetMembership, touchCircle } from '../domain/circles'
 import { env } from '../env'
 import { requireAuth } from '../middleware/session'
+import { isOverQuota } from '../tools/fuel'
 import { manifestOf } from '../tools/runs'
 import { clearSchedules, scheduleSnapshot, syncSchedules } from '../tools/schedules'
 import { currentVersion, getTool } from '../tools/service'
@@ -66,6 +68,11 @@ export const circleToolsApp = new Hono<AppEnv>()
       .where(eq(circleTools.circleId, circle.id))
       .orderBy(circleTools.installedAt)
     const dev = await devSession(userId, circle.id)
+    // 开发者本月燃料用完时，后端与写入暂停，圈主要看得到
+    const overQuota = new Map<string, boolean>()
+    for (const ownerId of new Set(rows.map(({ tool }) => tool.ownerId))) {
+      overQuota.set(ownerId, await isOverQuota(ownerId))
+    }
     return c.json({
       tools: rows.map(({ installed, tool, version, installer }) => {
         const manifest = manifestOf(version.manifest)
@@ -80,6 +87,7 @@ export const circleToolsApp = new Hono<AppEnv>()
           pending: { scopes: manifest.permissions, schedules: manifest.schedules },
           installedAt: installed.installedAt,
           installedBy: installer,
+          overQuota: overQuota.get(tool.ownerId) ?? false,
         }
       }),
       dev: dev ? { slug: DEV_TOOL_SLUG, name: dev.manifest.name, url: dev.url } : null,
@@ -189,6 +197,7 @@ export const circleToolsApp = new Hono<AppEnv>()
     let entryUrl: string
     let dev = false
     let inst: number | undefined
+    let developer: { id: string; name: string } | null = null
     if (slug === DEV_TOOL_SLUG) {
       const session = await devSession(me.id, circle.id)
       if (!session) throw new HTTPException(404, { message: '没有进行中的本地开发会话' })
@@ -212,6 +221,8 @@ export const circleToolsApp = new Hono<AppEnv>()
       inst = installed[0].installedAt.getTime()
       info = { slug: tool.slug, name: tool.name, version: version.version }
       entryUrl = `${env.TOOL_ORIGIN}/t/${tool.slug}/`
+      const [owner] = await db.select({ id: user.id, name: user.name }).from(user).where(eq(user.id, tool.ownerId)).limit(1)
+      if (owner && owner.name !== DELETED_USER_NAME) developer = owner
     }
 
     const { token, expiresAt } = await issueToolToken({
@@ -222,9 +233,11 @@ export const circleToolsApp = new Hono<AppEnv>()
       dev,
       inst,
     })
+    // developer 只给宿主页做"反馈"入口，不进 iframe 的上下文
     return c.json({
       token,
       expiresAt,
+      developer,
       context: {
         user: { id: me.id, name: me.name },
         circle: { id: circle.id, name: circle.name },

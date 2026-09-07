@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { API_URL } from '../playwright.config'
-import { adminSession, backendBundle, createCircle, joinSchool, register, SCHOOL, uniqueName } from './helpers'
+import { adminSession, backendBundle, createCircle, joinSchool, makeDeveloper, register, SCHOOL, uniqueName } from './helpers'
 
 async function publishAndApprove(dev: APIRequestContext, admin: APIRequestContext, bundle: Buffer): Promise<void> {
   const published = await dev.post(`${API_URL}/api/tools/publish`, {
@@ -28,6 +28,7 @@ test('后端工具：安装页看到时间表 → 圈内调用后端 → 定时�
   const slug = `backend-${Math.random().toString(36).slice(2, 8)}`
   const name = uniqueName('值日提醒')
   await adminSession(admin)
+  await makeDeveloper(admin, devPage.request)
   await publishAndApprove(devPage.request, admin, backendBundle(slug, name))
 
   // 安装页把时间表翻成人话

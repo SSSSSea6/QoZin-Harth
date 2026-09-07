@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { API_URL } from '../playwright.config'
-import { adminSession, counterBundle, createCircle, joinSchool, register, SCHOOL, uniqueName } from './helpers'
+import { adminSession, counterBundle, createCircle, joinSchool, makeDeveloper, register, SCHOOL, uniqueName } from './helpers'
 
 test('工具：发布 → 审核 → 圈主安装 → 成员在圈内使用，数据按圈隔离', async ({ browser }) => {
   const devPage = await (await browser.newContext()).newPage()
@@ -15,8 +15,15 @@ test('工具：发布 → 审核 → 圈主安装 → 成员在圈内使用，�
   const otherName = uniqueName('另一个圈')
   const otherId = await createCircle(ownerPage, otherName, SCHOOL)
 
-  // 开发者用 API 发布（等价于 harth publish）
+  // 没有资格发不了；拿到邀请码后用 API 发布（等价于 harth publish）
   const slug = `fixture-${Math.random().toString(36).slice(2, 8)}`
+  const refused = await devPage.request.post(`${API_URL}/api/tools/publish`, {
+    headers: { 'content-type': 'application/zip' },
+    data: counterBundle(slug, '计数器'),
+  })
+  expect(refused.status()).toBe(403)
+  await adminSession(admin)
+  await makeDeveloper(admin, devPage.request)
   const published = await devPage.request.post(`${API_URL}/api/tools/publish`, {
     headers: { 'content-type': 'application/zip' },
     data: counterBundle(slug, '计数器'),
@@ -26,7 +33,6 @@ test('工具：发布 → 审核 → 圈主安装 → 成员在圈内使用，�
   expect(version.status).toBe('pending')
 
   // 管理员审核通过
-  await adminSession(admin)
   const reviewed = await admin.post(`${API_URL}/api/tools/versions/${version.id}/review`, {
     data: { decision: 'approve' },
   })

@@ -10,6 +10,7 @@ import { api, errorText } from '@/lib/api'
 import { timeAgo } from '@/lib/format'
 import { useLoad, useRequireSession } from '@/lib/hooks'
 import { VERSION_STATUS, type VersionStatus } from '@/lib/tool-status'
+import { DeveloperAdmin } from './developers'
 
 interface ReviewItem {
   id: string
@@ -77,6 +78,8 @@ export default function ReviewQueuePage() {
           </ul>
         </Panel>
       )}
+
+      {data && <DeveloperAdmin />}
     </Columns>
   )
 }

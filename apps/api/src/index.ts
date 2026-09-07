@@ -6,6 +6,7 @@ import { migrateDatabase } from './db/migrate'
 import { seed } from './db/seed'
 import { env } from './env'
 import { runSweep } from './jobs/sweep'
+import { chargeHolding } from './tools/fuel'
 import { startRunLoop } from './tools/runs'
 import { tickSchedules } from './tools/schedules'
 
@@ -13,6 +14,7 @@ export type { AppType } from './app'
 
 const SWEEP_QUEUE = 'lifecycle-sweep'
 const TOOL_TICK_QUEUE = 'tool-schedule-tick'
+const FUEL_HOLDING_QUEUE = 'fuel-holding'
 
 async function startJobs(): Promise<PgBoss | null> {
   if (!env.JOBS) return null
@@ -34,6 +36,12 @@ async function startJobs(): Promise<PgBoss | null> {
       if (result.created || result.skipped) console.log('[tools] 定时', result)
     })
     await boss.schedule(TOOL_TICK_QUEUE, '* * * * *', {}, { tz: 'Asia/Shanghai' })
+    await boss.createQueue(FUEL_HOLDING_QUEUE)
+    await boss.work(FUEL_HOLDING_QUEUE, async () => {
+      const result = await chargeHolding(new Date())
+      if (result.owners) console.log('[tools] 存储持有费', result)
+    })
+    await boss.schedule(FUEL_HOLDING_QUEUE, '7 0 * * *', {}, { tz: 'Asia/Shanghai' })
   }
   return boss
 }

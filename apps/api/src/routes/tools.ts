@@ -1,5 +1,6 @@
 import {
   TOOL_BACKEND_MAX_BYTES,
+  TOOL_PACKAGE_MAX_BYTES,
   TOOL_RUN_LIMITS,
   toolActionNameSchema,
   toolManifestSchema,
@@ -7,7 +8,7 @@ import {
   type ToolManifest,
 } from '@harth/shared'
 import { zValidator } from '@hono/zod-validator'
-import { and, asc, desc, eq, gte, isNotNull, isNull, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
@@ -15,9 +16,11 @@ import { db } from '../db'
 import { user } from '../db/auth-schema'
 import { circles, circleTools, memberships, toolDevSessions, toolRuns, tools, toolVersions } from '../db/schema'
 import { assertNotArchived, getMembership, mustGetCircle, mustGetMembership } from '../domain/circles'
+import { developerOf, requireDeveloper, statusOf } from '../domain/developers'
 import { env, isAdmin } from '../env'
 import { requireAuth } from '../middleware/session'
 import { DEV_TOOL_SLUG } from './circle-tools'
+import { usageSummary } from '../tools/fuel'
 import { backendHash, createRun, manifestOf, waitForRun, type ToolRunRow } from '../tools/runs'
 import {
   adminDecide,
@@ -38,9 +41,29 @@ const DEV_SESSION_HOURS = 12
 const REVIEW_FILES_MAX_BYTES = 300 * 1024
 const RECENT_REVIEWS = 20
 const DEV_RUNS = 20
-const STATS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
 type SessionUser = NonNullable<AppEnv['Variables']['user']>
+
+// 先看声明的长度，再边读边数，超过上限就停下
+async function readCapped(req: Request, max: number): Promise<Uint8Array> {
+  const tooBig = () => new HTTPException(413, { message: `包超过 ${max / 1024 / 1024} MB` })
+  if (Number(req.headers.get('content-length') ?? 0) > max) throw tooBig()
+  if (!req.body) return new Uint8Array()
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > max) {
+      await reader.cancel()
+      throw tooBig()
+    }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks)
+}
 
 function versionView(v: ToolVersionRow) {
   return {
@@ -142,15 +165,24 @@ export const toolsApp = new Hono<AppEnv>()
     })
   })
 
-  // 开发者对真实圈只看到最近 7 天按错误码汇总的次数
+  // 开发者看自己的工具：版本、装在几个圈、近 7 天运行次数、本月燃料；真实圈的内容一律不给
   .get('/mine', async (c) => {
-    const userId = c.get('user')!.id
+    const me = c.get('user')!
     const mine = await db
       .select()
       .from(tools)
-      .where(eq(tools.ownerId, userId))
+      .where(eq(tools.ownerId, me.id))
       .orderBy(desc(tools.createdAt))
-    const since = new Date(Date.now() - STATS_WINDOW_MS)
+    const [usage, developer] = await Promise.all([usageSummary(me.id), developerOf(db, me.id)])
+    const installs = new Map<string, number>()
+    if (mine.length > 0) {
+      const rows = await db
+        .select({ toolId: circleTools.toolId, value: sql<number>`count(*)`.mapWith(Number) })
+        .from(circleTools)
+        .where(inArray(circleTools.toolId, mine.map((tool) => tool.id)))
+        .groupBy(circleTools.toolId)
+      for (const row of rows) installs.set(row.toolId, row.value)
+    }
     const result = []
     for (const tool of mine) {
       const versions = await db
@@ -158,26 +190,33 @@ export const toolsApp = new Hono<AppEnv>()
         .from(toolVersions)
         .where(eq(toolVersions.toolId, tool.id))
         .orderBy(desc(toolVersions.createdAt))
-      const stats = await db
-        .select({ status: toolRuns.status, errorCode: toolRuns.errorCode, value: sql<number>`count(*)`.mapWith(Number) })
-        .from(toolRuns)
-        .where(and(eq(toolRuns.toolId, tool.id), eq(toolRuns.environment, 'prod'), gte(toolRuns.createdAt, since)))
-        .groupBy(toolRuns.status, toolRuns.errorCode)
-      const runs = { total: 0, ok: 0, failed: {} as Record<string, number> }
-      for (const row of stats) {
-        runs.total += row.value
-        if (row.status === 'ok') runs.ok += row.value
-        else if (row.errorCode) runs.failed[row.errorCode] = (runs.failed[row.errorCode] ?? 0) + row.value
-      }
+      const stats = usage.tools.get(tool.id)
       result.push({
         slug: tool.slug,
         name: tool.name,
         currentVersionId: tool.currentVersionId,
         versions: versions.map(versionView),
-        runs,
+        installs: installs.get(tool.id) ?? 0,
+        week: {
+          runs: stats?.week.runs ?? 0,
+          ok: stats?.week.ok ?? 0,
+          failed: stats?.week.failed ?? 0,
+          skipped: stats?.week.skipped ?? 0,
+        },
+        monthUnits: stats?.month.units ?? 0,
       })
     }
-    return c.json({ tools: result })
+    return c.json({
+      tools: result,
+      developer: statusOf(developer),
+      usage: {
+        month: usage.month,
+        used: usage.used,
+        reserved: usage.reserved,
+        allowance: usage.allowance,
+        storageBytes: usage.storageBytes,
+      },
+    })
   })
 
   .get('/review', async (c) => {
@@ -198,10 +237,13 @@ export const toolsApp = new Hono<AppEnv>()
     return c.json({ pending: pending.map(reviewItem), recent: recent.map(reviewItem) })
   })
 
+  // 资格门禁在读包之前，没资格的连解压都不做
   .post('/publish', async (c) => {
-    const zip = new Uint8Array(await c.req.arrayBuffer())
+    const me = c.get('user')!
+    await requireDeveloper(me.id)
+    const zip = await readCapped(c.req.raw, TOOL_PACKAGE_MAX_BYTES)
     if (zip.byteLength === 0) throw new HTTPException(400, { message: '请求体为空' })
-    const { tool, version } = await publish(c.get('user')!.id, zip)
+    const { tool, version } = await publish(me.id, zip)
     return c.json({ tool: { slug: tool.slug, name: tool.name }, version: versionView(version) }, 201)
   })
 

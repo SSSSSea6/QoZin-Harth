@@ -2,7 +2,7 @@ import { strToU8, zipSync } from 'fflate'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { app } from '../src/app'
 import { seed } from '../src/db/seed'
-import { TestUser } from './helpers'
+import { becomeAdmin, makeDeveloper, TestUser } from './helpers'
 
 const admin = new TestUser('管理员')
 const dev = new TestUser('开发者')
@@ -55,8 +55,9 @@ async function createCircle(user: TestUser, name: string): Promise<string> {
 
 beforeAll(async () => {
   await seed()
-  await admin.signUp('admin@test.dev')
+  await becomeAdmin(admin, 'admin@test.dev')
   await dev.signUp('dev@test.dev')
+  await makeDeveloper(admin, dev)
   await owner.signUp('owner@test.dev')
   await member.signUp('member@test.dev')
   for (const u of [owner, member, dev]) await u.post('/api/circles/nuaa/join')

@@ -82,6 +82,9 @@ function DevPanel() {
     <Panel>
       <PanelTitle>做一个工具</PanelTitle>
       <p className="text-sm leading-6 text-foreground-2">一个页面加几行代码，就能跑在任何圈子里。</p>
+      <Link href="/developers" className="mt-2 block text-sm hover:underline">
+        开发者说明与额度
+      </Link>
       <details className="mt-3">
         <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
           用命令行发布

@@ -4,12 +4,26 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { db } from '../db'
 import { circles } from '../db/schema'
+import { grantTestAdmin } from '../env'
 import { runSweep } from '../jobs/sweep'
+import { chargeHolding } from '../tools/fuel'
 import { makeSchedulesDue, tickSchedules } from '../tools/schedules'
 import { getTool } from '../tools/service'
 
-// 只在 HARTH_TEST_HOOKS=1 时挂载，测试里用来改写时间、触发巡查与定时任务
+// 只在 HARTH_TEST_HOOKS=1 时挂载，测试里用来指定管理员、改写时间、触发巡查与定时任务
 export const testHooksApp = new Hono()
+  .post('/admin', zValidator('json', z.object({ userId: z.string() })), (c) => {
+    grantTestAdmin(c.req.valid('json').userId)
+    return c.json({ ok: true })
+  })
+  .post(
+    '/fuel-holding',
+    zValidator('json', z.object({ now: z.iso.datetime().optional() })),
+    async (c) => {
+      const { now } = c.req.valid('json')
+      return c.json(await chargeHolding(now ? new Date(now) : new Date()))
+    },
+  )
   .post(
     '/circle-times',
     zValidator(

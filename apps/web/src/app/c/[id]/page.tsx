@@ -576,6 +576,7 @@ interface InstalledTool {
   name: string
   description: string
   installedBy: string
+  overQuota: boolean
   installedAt: string
   hasBackend: boolean
   schedules: ToolScheduleView[]
@@ -697,6 +698,9 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
                   <span className="mt-0.5 block text-xs text-muted-foreground">
                     定时：{tool.schedules.map(scheduleText).join('；')}
                   </span>
+                )}
+                {tool.overQuota && (
+                  <span className="mt-0.5 block text-xs text-amber-300">开发者本月燃料已用完，后端运行和写入停到下个月</span>
                 )}
               </div>
               {isOwner && tool.hasBackend && (

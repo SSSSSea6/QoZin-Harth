@@ -3,6 +3,7 @@ import { and, asc, desc, eq, lt, notExists, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import {
   TOOL_API_OPS,
+  TOOL_RUN_ERROR_CODES,
   TOOL_RUN_LIMITS,
   toolManifestSchema,
   type ToolManifest,
@@ -10,12 +11,14 @@ import {
   type ToolRunTrigger,
   type ToolScope,
 } from '@harth/shared'
+import { HTTPException } from 'hono/http-exception'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
 import { circles, circleTools, toolDevSessions, toolRuns, tools, toolVersions } from '../db/schema'
 import { env, isAdmin } from '../env'
 import { executeAction, type Bridge } from './executor'
 import type { GuestContext } from './executor/protocol'
+import { ownerOfTool, reconcileFuel, reserveRun, settleRun, TERMINAL_RUN_STATUSES } from './fuel'
 import { readPackageFile } from './store'
 import { issueToolToken } from './token'
 
@@ -25,7 +28,7 @@ const KEEP_PER_INSTALL = 100
 const KEEP_PROD_MS = 30 * 24 * 60 * 60 * 1000
 const KEEP_DEV_MS = 24 * 60 * 60 * 1000
 const MISSED_GRACE_MS = 30 * 60 * 1000
-const TERMINAL: ToolRunRow['status'][] = ['ok', 'error', 'timeout', 'skipped', 'interrupted']
+const TERMINAL = TERMINAL_RUN_STATUSES
 
 interface ApiLike {
   request: (input: string, init?: RequestInit) => Response | Promise<Response>
@@ -63,6 +66,8 @@ export interface CreateRunInput {
   action: string
   input: unknown
   userId: string | null
+  // 管理员试运行不计入开发者的燃料
+  billable?: boolean
 }
 
 export async function queuedCount(): Promise<number> {
@@ -73,10 +78,20 @@ export async function queuedCount(): Promise<number> {
   return row?.value ?? 0
 }
 
-export async function createRun(input: CreateRunInput): Promise<ToolRunRow> {
+// 所有入口共用的准入：队列上限，以及按工具所有者预留燃料
+export async function createRun({ billable = true, ...input }: CreateRunInput): Promise<ToolRunRow> {
+  if ((await queuedCount()) >= TOOL_RUN_LIMITS.queue) throw new HTTPException(503, { message: '工具繁忙，稍后再试' })
+  const ownerId = await ownerOfTool(db, input.toolId)
+  const reservation = billable ? await reserveRun(db, ownerId) : null
+  if (billable && !reservation) throw new HTTPException(429, { message: TOOL_RUN_ERROR_CODES.QUOTA })
   const [row] = await db
     .insert(toolRuns)
-    .values({ ...input, status: 'queued' })
+    .values({
+      ...input,
+      status: 'queued',
+      fuelMonth: reservation?.month ?? null,
+      fuelReserved: reservation?.reserved ?? null,
+    })
     .returning()
   nudgeRuns()
   return row!
@@ -137,6 +152,7 @@ async function resolveRun(run: ToolRunRow, tool: typeof tools.$inferSelect): Pro
       scopes: manifest.permissions,
       dev: true,
       by: run.trigger === 'schedule' ? 'tool' : undefined,
+      br: true,
     })
     return { manifest, code: session.backend, file: manifest.backend, scopes: manifest.permissions, token }
   }
@@ -168,22 +184,21 @@ async function resolveRun(run: ToolRunRow, tool: typeof tools.$inferSelect): Pro
       scopes,
       by: run.trigger === 'schedule' ? 'tool' : undefined,
       inst: install.installedAt.getTime(),
+      br: true,
     })
     return { manifest, code, file: manifest.backend, scopes, token }
   }
 
   // 不是当前上架版本：只有管理员在审核页试运行时才会走到这里
-  const [admin] = run.userId
-    ? await db.select({ email: user.email }).from(user).where(eq(user.id, run.userId)).limit(1)
-    : []
-  if (!admin || !isAdmin(admin)) throw new RunError('FORBIDDEN', '这个版本还没上架')
+  if (!run.userId || !isAdmin({ id: run.userId })) throw new RunError('FORBIDDEN', '这个版本还没上架')
   const { token } = await issueToolToken({
-    sub: run.userId!,
+    sub: run.userId,
     cid: run.circleId,
     tid: tool.id,
     scopes: manifest.permissions,
     review: true,
     vid: version.id,
+    br: true,
   })
   return { manifest, code, file: manifest.backend, scopes: manifest.permissions, token }
 }
@@ -255,6 +270,11 @@ async function executeRun(run: ToolRunRow): Promise<void> {
   const final = updated ?? run
   for (const waiter of waiters.get(run.id) ?? []) waiter(final)
   waiters.delete(run.id)
+  try {
+    await db.transaction((tx) => settleRun(tx, final))
+  } catch (err) {
+    console.error('[tools] 结算失败，启动时补结', err)
+  }
   await prune(run.toolId, run.circleId, run.environment)
 }
 
@@ -352,6 +372,8 @@ export async function startRunLoop(): Promise<void> {
     .update(toolRuns)
     .set({ status: 'skipped', errorCode: 'TIMEOUT', error: '错过了计划时间', finishedAt: now })
     .where(and(eq(toolRuns.status, 'queued'), eq(toolRuns.trigger, 'schedule'), lt(toolRuns.scheduledFor, new Date(now.getTime() - MISSED_GRACE_MS))))
+  const settled = await reconcileFuel()
+  if (settled) console.log('[tools] 补结算', settled)
   nudgeRuns()
   setInterval(nudgeRuns, 5_000).unref()
 }

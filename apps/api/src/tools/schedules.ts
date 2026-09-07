@@ -1,6 +1,7 @@
 import { CronExpressionParser } from 'cron-parser'
 import { and, asc, eq, gte, inArray, lte, notInArray, sql } from 'drizzle-orm'
 import {
+  TOOL_RUN_ERROR_CODES,
   TOOL_RUN_LIMITS,
   TOOL_SCHEDULE_MIN_INTERVAL_MINUTES,
   TOOL_SCHEDULE_TZ,
@@ -10,6 +11,7 @@ import {
 } from '@harth/shared'
 import { db } from '../db'
 import { circles, toolRuns, toolSchedules, tools } from '../db/schema'
+import { recordSkipped, releaseReservation, reserveRun } from './fuel'
 import { nudgeRuns } from './runs'
 
 const OCCURRENCES_TO_CHECK = 500
@@ -132,8 +134,14 @@ export async function tickSchedules(now = new Date()): Promise<{ created: number
             gte(toolRuns.createdAt, new Date(now.getTime() - 60 * 60 * 1000)),
           ),
         )
-      const overQuota = (recent?.value ?? 0) >= TOOL_RUN_LIMITS.scheduledRunsPerHour
-      await tx
+      // 先看每小时次数，再按开发者的燃料预留；两样都过才排队
+      let skip: { code: 'BUDGET' | 'QUOTA'; error: string } | null =
+        (recent?.value ?? 0) >= TOOL_RUN_LIMITS.scheduledRunsPerHour
+          ? { code: 'BUDGET', error: `每小时最多定时运行 ${TOOL_RUN_LIMITS.scheduledRunsPerHour} 次` }
+          : null
+      const reservation = skip ? null : await reserveRun(tx, tool.ownerId, now)
+      if (!skip && !reservation) skip = { code: 'QUOTA', error: TOOL_RUN_ERROR_CODES.QUOTA }
+      const inserted = await tx
         .insert(toolRuns)
         .values({
           toolId: tool.id,
@@ -145,14 +153,25 @@ export async function tickSchedules(now = new Date()): Promise<{ created: number
           action: schedule.action,
           input: schedule.input ?? null,
           scheduledFor,
-          status: overQuota ? 'skipped' : 'queued',
-          errorCode: overQuota ? 'BUDGET' : null,
-          error: overQuota ? `每小时最多定时运行 ${TOOL_RUN_LIMITS.scheduledRunsPerHour} 次` : null,
-          finishedAt: overQuota ? now : null,
+          status: skip ? 'skipped' : 'queued',
+          errorCode: skip?.code ?? null,
+          error: skip?.error ?? null,
+          finishedAt: skip ? now : null,
+          fuelMonth: reservation?.month ?? null,
+          fuelReserved: reservation?.reserved ?? null,
         })
         .onConflictDoNothing({ target: [toolRuns.scheduleId, toolRuns.scheduledFor] })
-      if (overQuota) result.skipped++
-      else result.created++
+        .returning({ id: toolRuns.id })
+      if (!inserted[0]) {
+        if (reservation) await releaseReservation(tx, tool.ownerId, reservation.month, reservation.reserved)
+        continue
+      }
+      if (skip) {
+        await recordSkipped(tx, tool.id, tool.ownerId, now)
+        result.skipped++
+      } else {
+        result.created++
+      }
     }
   })
   if (result.created > 0) nudgeRuns()

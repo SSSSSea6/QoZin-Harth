@@ -6,6 +6,7 @@ import { env } from './env'
 import { sessionMiddleware } from './middleware/session'
 import { circleToolsApp } from './routes/circle-tools'
 import { circlesApp } from './routes/circles'
+import { developersApp } from './routes/developers'
 import { postsApp } from './routes/posts'
 import { testHooksApp } from './routes/test-hooks'
 import { toolApiApp } from './routes/tool-api'
@@ -27,6 +28,7 @@ export const app = new Hono()
   .route('/api/posts', postsApp)
   .route('/api/users', usersApp)
   .route('/api/tools', toolsApp)
+  .route('/api/developers', developersApp)
 
 if (env.TEST_HOOKS) {
   app.route('/api/test', testHooksApp)

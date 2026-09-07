@@ -35,9 +35,10 @@ export const env = {
   // 工具页面的源；必须与 WEB_URL 不同源，默认用 api 自己的地址
   TOOL_ORIGIN: process.env.HARTH_TOOL_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:3001',
   TOOLS_DIR: process.env.HARTH_TOOLS_DIR ?? join(homedir(), '.harth', 'tools'),
-  ADMIN_EMAILS: (process.env.HARTH_ADMIN_EMAILS ?? '')
+  // 管理员按用户 id 认，邮箱没有验证过，不能当身份用
+  ADMIN_IDS: (process.env.HARTH_ADMIN_IDS ?? '')
     .split(',')
-    .map((s) => s.trim().toLowerCase())
+    .map((s) => s.trim())
     .filter(Boolean),
   REVIEW: process.env.HARTH_REVIEW_API_KEY
     ? {
@@ -51,6 +52,14 @@ export const env = {
   TOOL_RUNS: process.env.HARTH_TOOL_RUNS !== '0',
 }
 
-export function isAdmin(user: { email: string }): boolean {
-  return env.ADMIN_EMAILS.includes(user.email.toLowerCase())
+// 测试钩子临时指定的管理员，只在 HARTH_TEST_HOOKS=1 时有内容
+const testAdmins = new Set<string>()
+
+export function grantTestAdmin(userId: string): void {
+  if (!env.TEST_HOOKS) throw new Error('只有测试钩子能指定管理员')
+  testAdmins.add(userId)
+}
+
+export function isAdmin(user: { id: string }): boolean {
+  return env.ADMIN_IDS.includes(user.id) || testAdmins.has(user.id)
 }

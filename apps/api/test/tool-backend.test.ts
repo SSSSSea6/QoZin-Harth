@@ -3,7 +3,7 @@ import { strToU8, zipSync } from 'fflate'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { app } from '../src/app'
 import { seed } from '../src/db/seed'
-import { TestUser } from './helpers'
+import { becomeAdmin, makeDeveloper, TestUser } from './helpers'
 
 const admin = new TestUser('管理员')
 const dev = new TestUser('开发者')
@@ -136,8 +136,9 @@ async function lastActivity(): Promise<string> {
 
 beforeAll(async () => {
   await seed()
-  await admin.signUp('admin2@test.dev')
+  await becomeAdmin(admin, 'admin2@test.dev')
   await dev.signUp('dev-be@test.dev')
+  await makeDeveloper(admin, dev)
   await owner.signUp('owner-be@test.dev')
   await member.signUp('member-be@test.dev')
   for (const u of [owner, member, dev]) await u.post('/api/circles/nuaa/join')
@@ -277,10 +278,11 @@ describe('安装、调用与限额', () => {
     const tally = runs.find((r) => r.action === 'tally')!
     expect(tally.logs).toContain('tally')
     expect((await dev.json(`/api/circles/${circleId}/tools/${SLUG}/runs`)).status).toBe(403)
-    const mine = await dev.json<{ tools: { slug: string; runs: { total: number; ok: number; failed: Record<string, number> } }[] }>('/api/tools/mine')
-    const stats = mine.body.tools.find((t) => t.slug === SLUG)!.runs
-    expect(stats.total).toBeGreaterThanOrEqual(7)
-    expect(stats.failed.GUEST_ERROR).toBe(1)
+    const mine = await dev.json<{ tools: { slug: string; installs: number; week: { runs: number; ok: number; failed: number } }[] }>('/api/tools/mine')
+    const tool = mine.body.tools.find((t) => t.slug === SLUG)!
+    expect(tool.installs).toBe(1)
+    expect(tool.week.runs).toBeGreaterThanOrEqual(7)
+    expect(tool.week.failed).toBeGreaterThanOrEqual(1)
     expect(JSON.stringify(mine.body)).not.toContain('secret')
   })
 })

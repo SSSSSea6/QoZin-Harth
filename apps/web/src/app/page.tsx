@@ -37,6 +37,13 @@ function Landing() {
       <Panel className="md:p-6">
         <AuthForms />
       </Panel>
+      <p className="text-center text-[13px] text-muted-foreground">
+        想把工具放进圈子里？看{' '}
+        <Link href="/developers" className="underline underline-offset-2 hover:text-foreground">
+          开发者说明
+        </Link>
+        。
+      </p>
     </div>
   )
 }

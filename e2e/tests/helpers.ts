@@ -4,13 +4,25 @@ import { API_URL, WEB_URL } from '../playwright.config'
 
 export const SCHOOL = '南京航空航天大学'
 
-// 管理员账号在 playwright.config 的 HARTH_ADMIN_EMAILS 里；重试时账号已存在，注册失败就直接登录
+// 管理员按用户 id 认，登录后用测试钩子指定；重试时账号已存在，注册失败就直接登录
 export async function adminSession(request: APIRequestContext): Promise<void> {
   const account = { email: 'admin@e2e.test', password: 'e2e-password' }
   const headers = { Origin: WEB_URL }
   await request.post(`${API_URL}/api/auth/sign-up/email`, { headers, data: { name: '管理员', ...account } })
   const signIn = await request.post(`${API_URL}/api/auth/sign-in/email`, { headers, data: account })
   expect(signIn.ok(), await signIn.text()).toBeTruthy()
+  const { user } = (await signIn.json()) as { user: { id: string } }
+  const granted = await request.post(`${API_URL}/api/test/admin`, { data: { userId: user.id } })
+  expect(granted.ok(), await granted.text()).toBeTruthy()
+}
+
+// 发布工具要开发者资格：管理员发一个邀请码，开发者兑换
+export async function makeDeveloper(admin: APIRequestContext, dev: APIRequestContext): Promise<void> {
+  const issued = await admin.post(`${API_URL}/api/developers/invites`, { data: { count: 1 } })
+  expect(issued.status(), await issued.text()).toBe(201)
+  const { codes } = (await issued.json()) as { codes: string[] }
+  const redeemed = await dev.post(`${API_URL}/api/developers/redeem`, { data: { code: codes[0] } })
+  expect(redeemed.status(), await redeemed.text()).toBe(201)
 }
 
 const COUNTER_TOOL_HTML = `<!doctype html><meta charset="utf-8">

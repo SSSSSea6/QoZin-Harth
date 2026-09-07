@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -239,6 +240,7 @@ export const toolVersions = pgTable(
       .default('pending'),
     review: jsonb('review').$type<Record<string, unknown>>(),
     backendHash: text('backend_hash'),
+    packageBytes: integer('package_bytes').notNull().default(0),
     createdAt: createdAt(),
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   },
@@ -261,7 +263,6 @@ export const circleTools = pgTable(
     scopes: text('scopes').array().notNull(),
     versionId: text('version_id'),
     schedules: jsonb('schedules').notNull().$type<Record<string, unknown>[]>().default([]),
-    requests: integer('requests').notNull().default(0),
     installedAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.circleId, t.toolId] })],
@@ -358,10 +359,120 @@ export const toolRuns = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true }),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
     durationMs: integer('duration_ms'),
+    // 准入时预留的燃料与账期，结束后按实际结算；fuelCharged 非空表示已结算
+    fuelMonth: text('fuel_month'),
+    fuelReserved: integer('fuel_reserved'),
+    fuelCharged: integer('fuel_charged'),
   },
   (t) => [
     index('tool_run_install_created_idx').on(t.toolId, t.circleId, t.createdAt),
     index('tool_run_status_idx').on(t.status, t.createdAt),
     uniqueIndex('tool_run_occurrence_uidx').on(t.scheduleId, t.scheduledFor),
+  ],
+)
+
+// 开发者资格：有行且未撤销才能发布；source 记来源，sourceRef 是邀请码或申请 id
+export const developers = pgTable('developer', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id),
+  source: text('source', { enum: ['invite', 'application', 'admin'] }).notNull(),
+  sourceRef: text('source_ref'),
+  grantedBy: text('granted_by').references(() => user.id),
+  grantedAt: timestamp('granted_at', { withTimezone: true }).defaultNow().notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  revokedBy: text('revoked_by').references(() => user.id),
+  revokeReason: text('revoke_reason'),
+})
+
+// 邀请码：ownerId 是持有者（空＝管理员发的），createdBy 是生成它的人
+export const developerInvites = pgTable(
+  'developer_invite',
+  {
+    code: text('code').primaryKey(),
+    ownerId: text('owner_id').references(() => user.id),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id),
+    usedBy: text('used_by').references(() => user.id),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('developer_invite_owner_idx').on(t.ownerId, t.createdAt),
+    check('developer_invite_used_pair', sql`(${t.usedBy} IS NULL) = (${t.usedAt} IS NULL)`),
+  ],
+)
+
+export const developerApplications = pgTable(
+  'developer_application',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    message: text('message').notNull(),
+    status: text('status', { enum: ['pending', 'approved', 'rejected'] })
+      .notNull()
+      .default('pending'),
+    note: text('note'),
+    createdAt: createdAt(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decidedBy: text('decided_by').references(() => user.id),
+  },
+  (t) => [
+    uniqueIndex('developer_application_pending_uidx').on(t.userId).where(sql`${t.status} = 'pending'`),
+    index('developer_application_status_idx').on(t.status, t.createdAt),
+    index('developer_application_user_idx').on(t.userId, t.createdAt),
+  ],
+)
+
+// 燃料账户：按工具所有者按账期一行，准入靠这一行的原子更新；数字是内部单位（1 燃料 = 100）
+export const fuelAccounts = pgTable(
+  'fuel_account',
+  {
+    ownerId: text('owner_id')
+      .notNull()
+      .references(() => user.id),
+    month: text('month').notNull(),
+    used: bigint('used', { mode: 'number' }).notNull().default(0),
+    reserved: bigint('reserved', { mode: 'number' }).notNull().default(0),
+    rateVersion: integer('rate_version').notNull(),
+    storageBytes: bigint('storage_bytes', { mode: 'number' }).notNull().default(0),
+    holdingBilledOn: text('holding_billed_on'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.month] }),
+    check('fuel_account_nonneg', sql`${t.used} >= 0 AND ${t.reserved} >= 0`),
+  ],
+)
+
+// 用量明细：按工具按天，月汇总与近 7 天统计都从这里来，不受运行记录修剪影响
+export const toolUsage = pgTable(
+  'tool_usage',
+  {
+    toolId: text('tool_id')
+      .notNull()
+      .references(() => tools.id),
+    ownerId: text('owner_id')
+      .notNull()
+      .references(() => user.id),
+    day: text('day').notNull(),
+    runs: integer('runs').notNull().default(0),
+    ok: integer('ok').notNull().default(0),
+    failed: integer('failed').notNull().default(0),
+    skipped: integer('skipped').notNull().default(0),
+    runMs: bigint('run_ms', { mode: 'number' }).notNull().default(0),
+    posts: integer('posts').notNull().default(0),
+    storageWrites: integer('storage_writes').notNull().default(0),
+    storageWriteBytes: bigint('storage_write_bytes', { mode: 'number' }).notNull().default(0),
+    units: bigint('units', { mode: 'number' }).notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.toolId, t.day] }),
+    index('tool_usage_owner_day_idx').on(t.ownerId, t.day),
   ],
 )

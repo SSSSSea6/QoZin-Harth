@@ -51,6 +51,7 @@ export const TOOL_RUN_ERROR_CODES = {
   MEMORY: '内存超限',
   TIMEOUT: '总时长超时',
   BUDGET: '超出调用或写入额度',
+  QUOTA: '开发者本月燃料已用完',
   ACTION_MISSING: '动作不存在',
   FORBIDDEN: '没有权限',
   HOST_ERROR: '平台接口出错',
@@ -131,3 +132,68 @@ export const toolStorageWriteSchema = z.object({
   value: z.unknown(),
   expectedVersion: z.number().int().positive().optional(),
 })
+
+// 用量按"燃料"计，内部用整数单位记账：1 燃料 = 100 单位
+export const FUEL_UNIT = 100
+export const FUEL_RATE_VERSION = 1
+
+export const FUEL_RATES = {
+  run: FUEL_UNIT,
+  runPerMs: 1,
+  post: 5 * FUEL_UNIT,
+  storageWrite: FUEL_UNIT,
+  storageWritePerKiB: FUEL_UNIT / 4,
+  holdingPerMiBDay: FUEL_UNIT,
+} as const
+
+// 每月免费额度（单位）：有开发者资格 20 000 燃料，没有资格的调试额度 2 000 燃料
+export const FUEL_ALLOWANCE = {
+  developer: 20_000 * FUEL_UNIT,
+  basic: 2_000 * FUEL_UNIT,
+} as const
+
+// 一次运行准入时预留的上限：固定部分 + 总时长上限
+export const FUEL_RUN_RESERVE = FUEL_RATES.run + TOOL_RUN_LIMITS.totalMs * FUEL_RATES.runPerMs
+
+export const TOOL_STORAGE_OWNER_MAX_BYTES = 256 * 1024 * 1024
+
+// 工具数据接口的频率上限（每个 用户 × 工具 × 圈）
+export const TOOL_API_LIMITS = {
+  readsPerMinute: 60,
+  readBurst: 20,
+  writesPerMinute: 20,
+  postsPerMinute: 6,
+} as const
+
+export function fuelForRun(durationMs: number): number {
+  const billable = Math.min(Math.max(0, Math.round(durationMs)), TOOL_RUN_LIMITS.totalMs)
+  return FUEL_RATES.run + billable * FUEL_RATES.runPerMs
+}
+
+export function fuelForStorageWrite(bytes: number): number {
+  return FUEL_RATES.storageWrite + Math.ceil((bytes * FUEL_RATES.storageWritePerKiB) / 1024)
+}
+
+export function fuelForHolding(bytes: number, days = 1): number {
+  return Math.ceil((bytes * FUEL_RATES.holdingPerMiBDay * days) / (1024 * 1024))
+}
+
+export function formatFuel(units: number): string {
+  return Math.round(units / FUEL_UNIT).toLocaleString('zh-CN')
+}
+
+// 账期按上海时间
+const shanghaiDay = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+export function billingDay(at: Date = new Date()): string {
+  return shanghaiDay.format(at)
+}
+
+export function billingMonth(at: Date = new Date()): string {
+  return billingDay(at).slice(0, 7)
+}

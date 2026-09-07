@@ -4,7 +4,6 @@ import { formatInviteCode } from '@harth/shared'
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { timeAgo } from '@/lib/format'
 
 export interface InviteView {
   code: string
@@ -17,8 +16,9 @@ export interface InviteView {
 function stateOf(invite: InviteView): string {
   if (invite.usedBy) return `${invite.usedBy} 已用`
   if (invite.revokedAt) return '已作废'
-  if (new Date(invite.expiresAt) < new Date()) return '已过期'
-  return `${timeAgo(invite.expiresAt).replace('后', '')}后过期`
+  const left = new Date(invite.expiresAt).getTime() - Date.now()
+  if (left <= 0) return '已过期'
+  return `${Math.ceil(left / (24 * 60 * 60 * 1000))} 天后过期`
 }
 
 export function InviteList({ invites }: { invites: InviteView[] }) {

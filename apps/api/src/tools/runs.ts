@@ -343,27 +343,36 @@ async function claimNext(): Promise<ToolRunRow | null> {
 
 let inFlight = 0
 let pumping = false
+let nudged = false
 let loopStarted = false
 
+// 领取进行中收到的提醒不能丢：记下来，这一轮领完再领一轮
 export function nudgeRuns(): void {
-  if (!env.TOOL_RUNS || pumping) return
+  if (!env.TOOL_RUNS) return
+  if (pumping) {
+    nudged = true
+    return
+  }
   void pump()
 }
 
 async function pump(): Promise<void> {
   pumping = true
   try {
-    while (inFlight < TOOL_RUN_LIMITS.concurrency) {
-      const run = await claimNext()
-      if (!run) break
-      inFlight++
-      void executeRun(run)
-        .catch((err) => console.error('[tools] 运行失败', err))
-        .finally(() => {
-          inFlight--
-          nudgeRuns()
-        })
-    }
+    do {
+      nudged = false
+      while (inFlight < TOOL_RUN_LIMITS.concurrency) {
+        const run = await claimNext()
+        if (!run) break
+        inFlight++
+        void executeRun(run)
+          .catch((err) => console.error('[tools] 运行失败', err))
+          .finally(() => {
+            inFlight--
+            nudgeRuns()
+          })
+      }
+    } while (nudged)
   } catch (err) {
     console.error('[tools] 领取运行失败', err)
   } finally {

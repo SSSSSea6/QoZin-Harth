@@ -76,8 +76,10 @@ export async function canSee(circle: CircleRow, userId: string): Promise<boolean
 }
 
 // 有活动即刷新活跃时间并解除倒计时
-export async function touchCircle(circleId: string, now = new Date()): Promise<void> {
-  await db
+type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+export async function touchCircle(circleId: string, now = new Date(), x: Executor = db): Promise<void> {
+  await x
     .update(circles)
     .set({ lastActivityAt: now, hibernationDeadline: null })
     .where(and(eq(circles.id, circleId), isNull(circles.archivedAt)))

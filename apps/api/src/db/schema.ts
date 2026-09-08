@@ -673,3 +673,97 @@ export const toolConsents = pgTable(
     index('tool_consent_tool_circle_idx').on(t.toolId, t.circleId),
   ],
 )
+
+export const NOTIFICATION_KINDS = ['dm', 'tool_post', 'circle_dying', 'application', 'report', 'moderation', 'appeal'] as const
+
+// 收件箱是通知与已读状态的真值；同一事件键未读时合并，读过之后再来的是新一条
+export const notifications = pgTable(
+  'notification',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    kind: text('kind', { enum: NOTIFICATION_KINDS }).notNull(),
+    eventKey: text('event_key').notNull(),
+    circleId: text('circle_id'),
+    actorId: text('actor_id'),
+    refType: text('ref_type').notNull(),
+    refId: text('ref_id').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    count: integer('count').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('notification_unread_event_uidx').on(t.userId, t.eventKey).where(sql`${t.readAt} IS NULL`),
+    index('notification_user_idx').on(t.userId, t.createdAt, t.id),
+    index('notification_updated_idx').on(t.updatedAt),
+    check('notification_kind', sql`${t.kind} IN ('dm', 'tool_post', 'circle_dying', 'application', 'report', 'moderation', 'appeal')`),
+  ],
+)
+
+// 一个设备一份绑定：换人登录时绑定版本加一，旧任务作废；会话失效即不再推
+export const devices = pgTable(
+  'device',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    platform: text('platform', { enum: ['ios', 'android'] }).notNull(),
+    provider: text('provider', { enum: ['apns', 'emas'] }).notNull(),
+    token: text('token').notNull(),
+    apnsEnv: text('apns_env', { enum: ['sandbox', 'production'] }),
+    appVersion: text('app_version'),
+    sessionId: text('session_id'),
+    bindingVersion: integer('binding_version').notNull().default(1),
+    boundAt: timestamp('bound_at', { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+    disabledAt: timestamp('disabled_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('device_provider_token_uidx').on(t.provider, t.token),
+    index('device_user_idx').on(t.userId, t.disabledAt),
+    index('device_seen_idx').on(t.lastSeenAt),
+    check('device_platform_provider', sql`(${t.platform} = 'ios' AND ${t.provider} = 'apns') OR (${t.platform} = 'android' AND ${t.provider} = 'emas')`),
+    check('device_apns_env', sql`${t.provider} <> 'apns' OR ${t.apnsEnv} IS NOT NULL`),
+  ],
+)
+
+// 逐设备的投递进度：重试只补没成功的那台
+export const notificationDeliveries = pgTable(
+  'notification_delivery',
+  {
+    notificationId: text('notification_id')
+      .notNull()
+      .references(() => notifications.id, { onDelete: 'cascade' }),
+    deviceId: text('device_id')
+      .notNull()
+      .references(() => devices.id, { onDelete: 'cascade' }),
+    bindingVersion: integer('binding_version').notNull(),
+    status: text('status', { enum: ['sent', 'failed', 'skipped'] }).notNull(),
+    attempts: integer('attempts').notNull().default(1),
+    lastError: text('last_error'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.notificationId, t.deviceId] }), index('notification_delivery_updated_idx').on(t.updatedAt)],
+)
+
+// 成员对某个圈工具帖的外部提醒开关；没有行 = 提醒；收件箱不受影响
+export const circleNotify = pgTable(
+  'circle_notify',
+  {
+    circleId: text('circle_id')
+      .notNull()
+      .references(() => circles.id),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    level: text('level', { enum: ['all', 'none'] }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.circleId, t.userId] }), check('circle_notify_level', sql`${t.level} IN ('all', 'none')`)],
+)

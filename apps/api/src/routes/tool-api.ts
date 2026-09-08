@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { db } from '../db'
 import { consentedUserIds, hasConsent } from '../domain/consent'
 import { assertActive, assertCanSpeak } from '../domain/policy'
+import { notify } from '../domain/notify'
 import { user } from '../db/auth-schema'
 import { circles, circleTools, memberships, posts, toolDevSessions, tools, toolStorage } from '../db/schema'
 import { assertNotArchived, getMembership, mustGetCircle, touchCircle } from '../domain/circles'
@@ -331,6 +332,19 @@ export const toolApiApp = new Hono<ToolEnv>()
           })
           .returning({ id: posts.id })
         await charge(tx, grant, FUEL_RATES.post, { posts: 1 })
+        if (grant.byTool) {
+          const hour = new Date().toISOString().slice(0, 13)
+          await notify(tx, {
+            kind: 'tool_post',
+            eventKey: `tool:${grant.circleId}:${hour}`,
+            circleId: grant.circleId,
+            refType: 'circle',
+            refId: grant.circleId,
+            title: '圈里的工具发了新帖',
+            body: parsed.title.slice(0, 80),
+            circleMembersOf: grant.circleId,
+          })
+        }
         return row!
       })
       if (!grant.byTool) await touchCircle(grant.circleId)

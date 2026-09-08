@@ -3,14 +3,17 @@ import { db } from '../db'
 import { account, deviceCode, session, user } from '../db/auth-schema'
 import {
   appeals,
+  circleNotify,
   circles,
   comments,
   developerApplications,
   developers,
+  devices,
   fuelAccounts,
   memberships,
   messages,
   moderations,
+  notifications,
   posts,
   reports,
   responses,
@@ -163,6 +166,14 @@ export async function exportAccount(userId: string) {
     .select({ toolId: toolConsents.toolId, circleId: toolConsents.circleId, scopes: toolConsents.scopes, consentedAt: toolConsents.consentedAt, revokedAt: toolConsents.revokedAt })
     .from(toolConsents)
     .where(eq(toolConsents.userId, userId))
+  const myNotifications = await db
+    .select({ id: notifications.id, kind: notifications.kind, title: notifications.title, body: notifications.body, createdAt: notifications.createdAt, readAt: notifications.readAt })
+    .from(notifications)
+    .where(eq(notifications.userId, userId))
+  const myDevices = await db
+    .select({ id: devices.id, platform: devices.platform, appVersion: devices.appVersion, boundAt: devices.boundAt, lastSeenAt: devices.lastSeenAt, disabledAt: devices.disabledAt })
+    .from(devices)
+    .where(eq(devices.userId, userId))
   const [restriction] = await db
     .select({ kind: userRestrictions.kind, until: userRestrictions.until, reason: userRestrictions.reason, createdAt: userRestrictions.createdAt })
     .from(userRestrictions)
@@ -191,6 +202,8 @@ export async function exportAccount(userId: string) {
     appeals: myAppeals,
     restriction: restriction ?? null,
     consents,
+    notifications: myNotifications,
+    devices: myDevices,
   }
 }
 
@@ -247,6 +260,9 @@ export async function deleteAccount(userId: string): Promise<void> {
     await tx.delete(userBlocks).where(or(eq(userBlocks.blockerId, userId), eq(userBlocks.blockedId, userId)))
     await tx.delete(smsSends).where(eq(smsSends.userId, userId))
     await tx.delete(toolConsents).where(eq(toolConsents.userId, userId))
+    await tx.delete(notifications).where(eq(notifications.userId, userId))
+    await tx.delete(devices).where(eq(devices.userId, userId))
+    await tx.delete(circleNotify).where(eq(circleNotify.userId, userId))
     await tx
       .update(user)
       .set({

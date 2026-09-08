@@ -4,6 +4,7 @@ import { SquarePen } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Avatar } from '@/components/avatar'
+import { NotificationBell } from '@/components/notification-bell'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/lib/auth-client'
 
@@ -32,6 +33,7 @@ export function TopBar() {
                 <SquarePen aria-hidden /> 发帖
               </Button>
             )}
+            <NotificationBell />
             <Link
               href={`/u/${session.user.id}`}
               className="flex h-11 items-center gap-2 rounded-md pl-1.5 pr-2.5 hover:bg-hover"

@@ -303,6 +303,13 @@ function CircleAside({
     onChanged()
   }
 
+  const [notifyLevel, setNotifyLevel] = useState<'all' | 'none' | null>(null)
+  const loadNotify = useCallback(async () => {
+    const res = await api.circles[':id'].notify.$get({ param: { id: circle.id } })
+    if (res.ok) setNotifyLevel((await res.json()).level)
+  }, [circle.id])
+  useLoad(loadNotify)
+
   return (
     <>
       <Panel>
@@ -326,6 +333,23 @@ function CircleAside({
             </dd>
           </div>
         </dl>
+        {!archived && notifyLevel && (
+          <div className="mt-3 flex items-center justify-between border-t pt-3 text-sm">
+            <span className="text-muted-foreground">工具发帖时提醒我</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={async () => {
+                const level = notifyLevel === 'all' ? 'none' : 'all'
+                const res = await api.circles[':id'].notify.$put({ param: { id: circle.id }, json: { level } })
+                if (res.ok) setNotifyLevel(level)
+              }}
+            >
+              {notifyLevel === 'all' ? '开' : '关'}
+            </Button>
+          </div>
+        )}
         {isOwner && circle.inviteCode && !archived && (
           <div className="mt-3 border-t pt-3">
             <InviteDialog circleId={circle.id} code={circle.inviteCode} />

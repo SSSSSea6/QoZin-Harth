@@ -8,6 +8,7 @@ import {
 import { and, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm'
 import { HTTPException } from 'hono/http-exception'
 import { db } from '../db'
+import { notify } from './notify'
 import { user } from '../db/auth-schema'
 import { developerApplications, developerInvites, developers } from '../db/schema'
 import type { Executor } from '../tools/fuel'
@@ -150,6 +151,15 @@ export async function decideApplication(
       .where(and(eq(developerApplications.id, id), eq(developerApplications.status, 'pending')))
       .returning()
     if (!application) throw new HTTPException(409, { message: '这条申请已经处理过了' })
+    await notify(tx, {
+      kind: 'application',
+      eventKey: `application:${application.id}:${decision}`,
+      refType: 'application',
+      refId: application.id,
+      title: decision === 'approve' ? '开发者申请通过了' : '开发者申请没有通过',
+      body: decision === 'approve' ? '可以发布工具了，邀请码在开发者页' : (trimmed ?? ''),
+      recipients: [application.userId],
+    })
     if (decision === 'reject') return { application, codes: [] }
     const result = await grant(tx, {
       userId: application.userId,

@@ -9,6 +9,7 @@ import { circlesApp } from './routes/circles'
 import { adminApp } from './routes/admin'
 import { appealsApp } from './routes/appeals'
 import { developersApp } from './routes/developers'
+import { devicesApp, notificationsApp } from './routes/notifications'
 import { reportsApp } from './routes/reports'
 import { postsApp } from './routes/posts'
 import { testHooksApp } from './routes/test-hooks'
@@ -17,6 +18,7 @@ import { toolStaticApp } from './routes/tool-static'
 import { toolsApp } from './routes/tools'
 import { usersApp } from './routes/users'
 import { errorCode } from './http'
+import { pushReady } from './push/transports'
 import { smsReady } from './sms'
 import { configureToolRuns } from './tools/runs'
 
@@ -29,7 +31,7 @@ export const app = new Hono()
   .use(sessionMiddleware)
   .use(enforceRestrictions)
   .get('/health', (c) =>
-    c.json({ ok: true, mode: env.SITE_MODE, phoneRequired: env.PHONE_REQUIRED, sms: smsReady() ? 'ready' : 'unconfigured' }),
+    c.json({ ok: true, mode: env.SITE_MODE, phoneRequired: env.PHONE_REQUIRED, sms: smsReady() ? 'ready' : 'unconfigured', push: pushReady() }),
   )
   .route('/api/circles', circlesApp)
   .route('/api/circles', circleToolsApp)
@@ -40,6 +42,8 @@ export const app = new Hono()
   .route('/api/reports', reportsApp)
   .route('/api/appeals', appealsApp)
   .route('/api/admin', adminApp)
+  .route('/api/notifications', notificationsApp)
+  .route('/api/devices', devicesApp)
 
 if (env.TEST_HOOKS) {
   app.route('/api/test', testHooksApp)

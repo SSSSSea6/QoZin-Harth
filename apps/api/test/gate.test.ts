@@ -37,7 +37,7 @@ beforeAll(async () => {
 describe('发言门禁', () => {
   it('健康检查报告门禁与短信状态', async () => {
     const res = await app.request('/health')
-    expect(await res.json()).toEqual({ ok: true, mode: 'preview', phoneRequired: true, sms: 'ready' })
+    expect(await res.json()).toEqual({ ok: true, mode: 'preview', phoneRequired: true, sms: 'ready', push: { apns: 'unconfigured', emas: 'unconfigured' } })
   })
 
   it('没绑手机号：发帖、回复、建圈、建私聊、发消息、改昵称都被拦', async () => {

@@ -19,11 +19,19 @@ import {
 import { fail } from '../http'
 import { canSee, getCircle, getMembership } from './circles'
 import { phoneFingerprint } from './phone'
+import { notify } from './notify'
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 type Executor = typeof db | Tx
 type ModerationRow = typeof moderations.$inferSelect
 type ReportRow = typeof reports.$inferSelect
+
+const MODERATION_TITLE: Partial<Record<ModerationRow['action'], string>> = {
+  hide: '你的内容被隐藏了',
+  mute: '你被禁言了',
+  ban: '你的账号被封禁了',
+  tool_suspend: '你的工具被停用了',
+}
 
 export interface Target {
   type: ReportTargetType
@@ -203,6 +211,17 @@ async function applyModeration(tx: Tx, effect: Effect): Promise<ModerationRow> {
     })
     .returning()
   const moderation = row!
+  if (effect.target.subjectUserId && !effect.reversalOf) {
+    await notify(tx, {
+      kind: 'moderation',
+      eventKey: `moderation:${moderation.id}`,
+      refType: 'moderation',
+      refId: moderation.id,
+      title: MODERATION_TITLE[effect.action] ?? '你的内容或账号被处理',
+      body: effect.reason,
+      recipients: [effect.target.subjectUserId],
+    })
+  }
   switch (effect.action) {
     case 'hide': {
       if (!isContent(effect.target.type)) throw fail(400, 'BAD_REQUEST', '只有内容能隐藏')
@@ -297,6 +316,17 @@ export async function decideReport(
       .where(and(eq(reports.id, reportId), eq(reports.status, 'pending')))
       .returning({ id: reports.id })
     if (!updated) throw fail(409, 'CONFLICT', '这条举报已经处理过了')
+    if (report.reporterId) {
+      await notify(tx, {
+        kind: 'report',
+        eventKey: `report:${report.id}`,
+        refType: 'report',
+        refId: report.id,
+        title: decision.action === 'dismiss' ? '你的举报未被采纳' : '你的举报已处理',
+        body: decision.action === 'dismiss' ? decision.reason : '已按规则处理，谢谢你',
+        recipients: [report.reporterId],
+      })
+    }
     return { moderationId }
   })
 }
@@ -417,12 +447,23 @@ export async function decideAppeal(adminId: string, appealId: string, accept: bo
     const [already] = await db.select({ id: moderations.id }).from(moderations).where(eq(moderations.reversalOf, appeal.moderationId)).limit(1)
     if (!already) await reverseModeration(adminId, appeal.moderationId, `申诉通过：${note}`)
   }
-  const [updated] = await db
-    .update(appeals)
-    .set({ status: accept ? 'accepted' : 'rejected', decidedBy: adminId, decidedAt: new Date(), note })
-    .where(and(eq(appeals.id, appealId), eq(appeals.status, 'pending')))
-    .returning({ id: appeals.id })
-  if (!updated) throw fail(409, 'CONFLICT', '这条申诉已经处理过了')
+  await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(appeals)
+      .set({ status: accept ? 'accepted' : 'rejected', decidedBy: adminId, decidedAt: new Date(), note })
+      .where(and(eq(appeals.id, appealId), eq(appeals.status, 'pending')))
+      .returning({ id: appeals.id })
+    if (!updated) throw fail(409, 'CONFLICT', '这条申诉已经处理过了')
+    await notify(tx, {
+      kind: 'appeal',
+      eventKey: `appeal:${appeal.id}`,
+      refType: 'appeal',
+      refId: appeal.id,
+      title: accept ? '申诉通过了' : '申诉未通过',
+      body: note,
+      recipients: [appeal.userId],
+    })
+  })
 }
 
 // 巡查：最近的公开内容（帖子与回复），私聊只在被举报后可见

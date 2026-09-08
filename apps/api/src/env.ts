@@ -40,6 +40,9 @@ if (PUBLIC_SITE && PHONE_REQUIRED_RAW !== '1') {
 if (PRODUCTION && process.env.HARTH_TEST_HOOKS === '1') {
   throw new Error('生产构建不能开 HARTH_TEST_HOOKS')
 }
+if (PUBLIC_SITE && process.env.HARTH_JOBS === '0') {
+  throw new Error('对外运营不能关 HARTH_JOBS：收了消息却永不投递')
+}
 const SMS_PROVIDER = process.env.HARTH_SMS_PROVIDER ?? (process.env.HARTH_SMS_ACCESS_KEY_ID ? 'aliyun' : 'none')
 if (!['aliyun', 'test', 'none'].includes(SMS_PROVIDER)) {
   throw new Error('HARTH_SMS_PROVIDER 只能是 aliyun、test 或不设')
@@ -90,6 +93,23 @@ export const env = {
     : null,
   TEST_HOOKS: process.env.HARTH_TEST_HOOKS === '1',
   JOBS: process.env.HARTH_JOBS !== '0',
+  APNS: process.env.HARTH_APNS_KEY
+    ? {
+        key: Buffer.from(process.env.HARTH_APNS_KEY, 'base64').toString('utf8'),
+        keyId: required('HARTH_APNS_KEY_ID'),
+        teamId: required('HARTH_APNS_TEAM_ID'),
+        bundleId: required('HARTH_APNS_BUNDLE_ID'),
+        production: process.env.HARTH_APNS_ENV !== 'sandbox',
+      }
+    : null,
+  EMAS: process.env.HARTH_EMAS_ACCESS_KEY_ID
+    ? {
+        accessKeyId: process.env.HARTH_EMAS_ACCESS_KEY_ID,
+        accessKeySecret: required('HARTH_EMAS_ACCESS_KEY_SECRET'),
+        appKey: required('HARTH_EMAS_APP_KEY'),
+        region: process.env.HARTH_EMAS_REGION ?? 'cn-hangzhou',
+      }
+    : null,
   TOOL_RUNS: process.env.HARTH_TOOL_RUNS !== '0',
 }
 

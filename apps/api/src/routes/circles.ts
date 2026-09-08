@@ -15,10 +15,12 @@ import { z } from 'zod'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
 import { assertNotBlocked } from '../domain/blocks'
+import { notify } from '../domain/notify'
 import { assertCanSpeak } from '../domain/policy'
 import { assertContentAllowed, flagIfMatched } from '../domain/rules'
 import { HIDDEN_PLACEHOLDER } from '../domain/visibility'
 import {
+  circleNotify,
   circleParents,
   circles,
   circleTemplates,
@@ -473,6 +475,31 @@ export const circlesApp = new Hono<AppEnv>()
     },
   )
 
+  // 圈内工具帖的外部提醒开关；收件箱照常
+  .put('/:id/notify', zValidator('json', z.object({ level: z.enum(['all', 'none']) })), async (c) => {
+    const userId = c.get('user')!.id
+    const circle = await mustGetCircle(c.req.param('id'))
+    await mustGetMembership(circle.id, userId)
+    const { level } = c.req.valid('json')
+    await db
+      .insert(circleNotify)
+      .values({ circleId: circle.id, userId, level })
+      .onConflictDoUpdate({ target: [circleNotify.circleId, circleNotify.userId], set: { level } })
+    return c.json({ level })
+  })
+
+  .get('/:id/notify', async (c) => {
+    const userId = c.get('user')!.id
+    const circle = await mustGetCircle(c.req.param('id'))
+    await mustGetMembership(circle.id, userId)
+    const [row] = await db
+      .select({ level: circleNotify.level })
+      .from(circleNotify)
+      .where(and(eq(circleNotify.circleId, circle.id), eq(circleNotify.userId, userId)))
+      .limit(1)
+    return c.json({ level: row?.level ?? 'all' })
+  })
+
   .post('/:id/messages', zValidator('json', messageInput), async (c) => {
     const userId = c.get('user')!.id
     await assertCanSpeak(db, userId)
@@ -488,16 +515,33 @@ export const circlesApp = new Hono<AppEnv>()
     if (other) await assertNotBlocked(userId, other.userId)
     const input = c.req.valid('json')
     await assertContentAllowed(input.content)
-    const [row] = await db
-      .insert(messages)
-      .values({
-        circleId: circle.id,
-        authorId: userId,
-        content: input.content,
-        replyToId: input.replyToId ?? null,
-      })
-      .returning()
-    await touchCircle(circle.id)
-    await flagIfMatched('message', row!.id, row!.content, row!.content)
+    const me = c.get('user')!
+    const row = await db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(messages)
+        .values({
+          circleId: circle.id,
+          authorId: userId,
+          content: input.content,
+          replyToId: input.replyToId ?? null,
+        })
+        .returning()
+      await touchCircle(circle.id, new Date(), tx)
+      if (other) {
+        await notify(tx, {
+          kind: 'dm',
+          eventKey: `dm:${circle.id}`,
+          circleId: circle.id,
+          actorId: userId,
+          refType: 'circle',
+          refId: circle.id,
+          title: `${me.name} 发来消息`,
+          body: input.content.slice(0, 80),
+          recipients: [other.userId],
+        })
+      }
+      return inserted!
+    })
+    await flagIfMatched('message', row.id, row.content, row.content)
     return c.json({ message: row }, 201)
   })

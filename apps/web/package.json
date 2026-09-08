@@ -16,6 +16,7 @@
     "better-auth": "1.7.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cn": "^0.2.6",
     "hono": "catalog:",
     "lucide-react": "^1.39.0",
     "next": "16.3.4",

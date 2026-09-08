@@ -65,6 +65,12 @@ export async function becomeAdmin(user: TestUser, email: string): Promise<string
   return id
 }
 
+// 成员先同意工具的权限清单，令牌才发得出来
+export async function consentTool(user: TestUser, circleId: string, slug: string): Promise<void> {
+  const res = await user.post(`/api/circles/${circleId}/tools/${slug}/consent`)
+  expect(res.status).toBe(200)
+}
+
 // 走真实路径拿资格：管理员发码，开发者兑换
 export async function makeDeveloper(admin: TestUser, dev: TestUser): Promise<void> {
   const issued = await admin.post<{ codes: string[] }>('/api/developers/invites', { count: 1 })

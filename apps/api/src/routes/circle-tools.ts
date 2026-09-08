@@ -1,13 +1,15 @@
-import { toolSlugSchema, type ToolManifest, type ToolSchedule, type ToolScope } from '@harth/shared'
+import { GOVERNANCE_ERROR_CODES, TOOL_RUN_ERROR_CODES, type ToolManifest, type ToolSchedule, type ToolScope, toolSlugSchema } from '@harth/shared'
 import { zValidator } from '@hono/zod-validator'
 import { and, desc, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
+import { fail } from '../http'
 import { z } from 'zod'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
 import { circleTools, toolDevSessions, toolRuns, tools, toolStorage, toolVersions } from '../db/schema'
 import { DELETED_USER_NAME } from '../domain/account'
+import { grantConsent, hasConsent } from '../domain/consent'
 import { assertNotArchived, mustGetCircle, mustGetMembership, touchCircle } from '../domain/circles'
 import { env } from '../env'
 import { requireAuth } from '../middleware/session'
@@ -88,6 +90,7 @@ export const circleToolsApp = new Hono<AppEnv>()
           installedAt: installed.installedAt,
           installedBy: installer,
           overQuota: overQuota.get(tool.ownerId) ?? false,
+          suspended: tool.suspendedAt !== null,
         }
       }),
       dev: dev ? { slug: DEV_TOOL_SLUG, name: dev.manifest.name, url: dev.url } : null,
@@ -185,6 +188,24 @@ export const circleToolsApp = new Hono<AppEnv>()
     return c.json({ runs: rows })
   })
 
+  // 成员同意当前权限清单；权限清单变了要重新同意
+  .post('/:id/tools/:slug/consent', slugParam, async (c) => {
+    const me = c.get('user')!
+    const { id, slug } = c.req.valid('param')
+    const circle = await mustGetCircle(id)
+    await mustGetMembership(circle.id, me.id)
+    const tool = await getTool(slug)
+    if (!tool) throw new HTTPException(404, { message: '工具不存在' })
+    const [installed] = await db
+      .select({ scopes: circleTools.scopes })
+      .from(circleTools)
+      .where(and(eq(circleTools.circleId, circle.id), eq(circleTools.toolId, tool.id)))
+      .limit(1)
+    if (!installed) throw new HTTPException(404, { message: '这个圈没有装这个工具' })
+    await grantConsent(me.id, tool.id, circle.id, installed.scopes as ToolScope[])
+    return c.json({ ok: true })
+  })
+
   .post('/:id/tools/:slug/token', slugParam, async (c) => {
     const me = c.get('user')!
     const { id, slug } = c.req.valid('param')
@@ -210,6 +231,7 @@ export const circleToolsApp = new Hono<AppEnv>()
       const tool = await getTool(slug)
       const version = tool ? await currentVersion(tool) : null
       if (!tool || !version) throw new HTTPException(404, { message: '工具不存在或还没上架' })
+      if (tool.suspendedAt) throw fail(403, 'SUSPENDED', TOOL_RUN_ERROR_CODES.SUSPENDED)
       const installed = await db
         .select()
         .from(circleTools)
@@ -223,6 +245,17 @@ export const circleToolsApp = new Hono<AppEnv>()
       entryUrl = `${env.TOOL_ORIGIN}/t/${tool.slug}/`
       const [owner] = await db.select({ id: user.id, name: user.name }).from(user).where(eq(user.id, tool.ownerId)).limit(1)
       if (owner && owner.name !== DELETED_USER_NAME) developer = owner
+      // 圈主安装只是圈级授权；成员本人先看清权限清单再同意，令牌才发
+      if (!(await hasConsent(me.id, tool.id, circle.id, scopes))) {
+        return c.json(
+          {
+            error: GOVERNANCE_ERROR_CODES.CONSENT_REQUIRED,
+            code: 'CONSENT_REQUIRED',
+            consent: { tool: { id: tool.id, slug: tool.slug, name: tool.name, version: version.version }, developer, scopes },
+          },
+          428,
+        )
+      }
     }
 
     const { token, expiresAt } = await issueToolToken({
@@ -237,6 +270,7 @@ export const circleToolsApp = new Hono<AppEnv>()
     return c.json({
       token,
       expiresAt,
+      toolId,
       developer,
       context: {
         user: { id: me.id, name: me.name },

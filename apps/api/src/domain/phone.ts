@@ -1,7 +1,9 @@
 import { SMS_LIMITS } from '@harth/shared'
 import { and, count, eq, gt, max, sql } from 'drizzle-orm'
+import { createHmac, hkdfSync } from 'node:crypto'
 import { db } from '../db'
 import { smsSends } from '../db/schema'
+import { env } from '../env'
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -52,4 +54,11 @@ export async function cleanupSmsSends(now: Date): Promise<number> {
     .where(sql`${smsSends.createdAt} < ${new Date(now.getTime() - KEEP_MS)}`)
     .returning({ id: smsSends.id })
   return rows.length
+}
+
+// 封禁期间同号不能再绑：只留 HMAC 指纹，密钥从会话密钥派生
+const FINGERPRINT_KEY = Buffer.from(hkdfSync('sha256', env.BETTER_AUTH_SECRET, '', 'harth-banned-phone', 32))
+
+export function phoneFingerprint(phone: string): string {
+  return createHmac('sha256', FINGERPRINT_KEY).update(phone).digest('hex')
 }

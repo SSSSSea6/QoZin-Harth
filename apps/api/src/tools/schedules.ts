@@ -135,8 +135,9 @@ export async function tickSchedules(now = new Date()): Promise<{ created: number
           ),
         )
       // 先看每小时次数，再按开发者的燃料预留；两样都过才排队
-      let skip: { code: 'BUDGET' | 'QUOTA'; error: string } | null =
-        (recent?.value ?? 0) >= TOOL_RUN_LIMITS.scheduledRunsPerHour
+      let skip: { code: 'BUDGET' | 'QUOTA' | 'SUSPENDED'; error: string } | null = tool.suspendedAt
+        ? { code: 'SUSPENDED', error: TOOL_RUN_ERROR_CODES.SUSPENDED }
+        : (recent?.value ?? 0) >= TOOL_RUN_LIMITS.scheduledRunsPerHour
           ? { code: 'BUDGET', error: `每小时最多定时运行 ${TOOL_RUN_LIMITS.scheduledRunsPerHour} 次` }
           : null
       const reservation = skip ? null : await reserveRun(tx, tool.ownerId, now)

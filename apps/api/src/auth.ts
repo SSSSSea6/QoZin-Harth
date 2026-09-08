@@ -8,7 +8,9 @@ import { HTTPException } from 'hono/http-exception'
 import { db } from './db'
 import * as authSchema from './db/auth-schema'
 import { recordSend, SmsRateLimited } from './domain/phone'
-import { assertCanSpeak } from './domain/policy'
+import { isPhoneBanned } from './domain/governance'
+import { assertCanSpeak, userState } from './domain/policy'
+import { assertContentAllowed } from './domain/rules'
 import { env, isAdmin } from './env'
 import { errorCode } from './http'
 import { sendVerificationCode, smsReady } from './sms'
@@ -19,12 +21,13 @@ export const APP_SCHEME = 'harth'
 const PHONE_PATHS = new Set(['/phone-number/send-otp', '/phone-number/verify'])
 
 // 门禁抛的是 Hono 异常，进了 better-auth 的钩子要换成它认识的错误才有响应体
-async function speakingCheck(userId: string): Promise<void> {
+async function speakingCheck(userId: string, text?: string): Promise<void> {
   try {
     await assertCanSpeak(db, userId)
+    if (text !== undefined) await assertContentAllowed(text)
   } catch (err) {
     if (err instanceof HTTPException) {
-      throw new APIError(err.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', { message: err.message, code: errorCode(err) })
+      throw new APIError(err.status === 401 ? 'UNAUTHORIZED' : err.status === 400 ? 'BAD_REQUEST' : 'FORBIDDEN', { message: err.message, code: errorCode(err) })
     }
     throw err
   }
@@ -54,7 +57,7 @@ export const auth = betterAuth({
         const body = (ctx.body ?? {}) as Record<string, unknown>
         if (body.name !== undefined || body.image !== undefined) {
           const session = await getSessionFromCtx(ctx)
-          if (session) await speakingCheck(session.user.id)
+          if (session) await speakingCheck(session.user.id, typeof body.name === 'string' ? body.name : undefined)
         }
         return
       }
@@ -70,6 +73,7 @@ export const auth = betterAuth({
       if (!smsReady()) {
         throw new APIError('SERVICE_UNAVAILABLE', { message: PHONE_ERROR_CODES.SMS_UNAVAILABLE, code: 'SMS_UNAVAILABLE' })
       }
+      if (await isPhoneBanned(phone)) throw new APIError('FORBIDDEN', { message: '这个号码暂时不能绑定', code: 'PHONE_BANNED' })
       try {
         await db.transaction((tx) => recordSend(tx, { phone, userId: session.user.id, ip: clientIp(ctx.headers) }))
       } catch (err) {
@@ -93,7 +97,7 @@ export const auth = betterAuth({
       validateClient: (clientId) => clientId === CLI_CLIENT_ID,
     }),
     customSession(async ({ user, session }) => ({
-      user: { ...user, isAdmin: isAdmin(user) },
+      user: { ...user, isAdmin: isAdmin(user), restriction: (await userState(db, user.id)).restriction },
       session,
     })),
   ],

@@ -7,6 +7,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { Avatar } from '@/components/avatar'
 import { GateError } from '@/components/gate-error'
+import { ItemMenu } from '@/components/item-menu'
 import { Columns } from '@/components/columns'
 import { Panel, PanelTitle } from '@/components/panel'
 import { PostList, type PostListItemData } from '@/components/post-list'
@@ -578,6 +579,7 @@ interface InstalledTool {
   description: string
   installedBy: string
   overQuota: boolean
+  suspended: boolean
   installedAt: string
   hasBackend: boolean
   schedules: ToolScheduleView[]
@@ -703,6 +705,7 @@ function ToolsTab({ circle }: { circle: CircleDetail }) {
                 {tool.overQuota && (
                   <span className="mt-0.5 block text-xs text-amber-300">开发者本月燃料已用完，后端运行和写入停到下个月</span>
                 )}
+                {tool.suspended && <span className="mt-0.5 block text-xs text-destructive">已被平台停用，暂时打不开</span>}
               </div>
               {isOwner && tool.hasBackend && (
                 <Button
@@ -865,6 +868,7 @@ interface Message {
   createdAt: string
   authorId: string
   authorName: string
+  hidden?: boolean
 }
 
 function DmPage({
@@ -952,8 +956,9 @@ function DmPage({
                       <span className="text-xs text-muted-foreground">
                         {timeAgo(m.createdAt)}
                       </span>
+                      {!m.hidden && <ItemMenu targetType="message" targetId={m.id} subjectId={m.authorId} className="ml-auto" />}
                     </div>
-                    <p className="mt-0.5 whitespace-pre-wrap break-words leading-relaxed">
+                    <p className={`mt-0.5 whitespace-pre-wrap break-words leading-relaxed${m.hidden ? ' italic text-muted-foreground' : ''}`}>
                       {m.content}
                     </p>
                   </div>

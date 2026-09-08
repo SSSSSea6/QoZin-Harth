@@ -51,6 +51,9 @@ test('工具：发布 → 审核 → 圈主安装 → 成员在圈内使用，�
   await ownerPage.goto(`/c/${circleId}`)
   await ownerPage.getByRole('tab', { name: '工具' }).click()
   await ownerPage.getByRole('link', { name: '计数器' }).click()
+  // 第一次打开先看权限清单
+  await expect(ownerPage.getByText('这个工具在这个圈里会用到你的：')).toBeVisible()
+  await ownerPage.getByRole('button', { name: '同意并打开' }).click()
   const frame = ownerPage.frameLocator('iframe[title="计数器"]')
   await expect(frame.getByText(`圈主 在 ${circleName}`)).toBeVisible()
   await expect(frame.getByText('计数 0')).toBeVisible()
@@ -65,6 +68,7 @@ test('工具：发布 → 审核 → 圈主安装 → 成员在圈内使用，�
   await otherRow.getByRole('button', { name: '安装' }).click()
   await expect(otherRow.getByRole('button', { name: '卸载' })).toBeVisible()
   await ownerPage.goto(`/c/${otherId}/t/${slug}`)
+  await ownerPage.getByRole('button', { name: '同意并打开' }).click()
   await expect(frame.getByText('计数 0')).toBeVisible()
 
   // 卸载即清空

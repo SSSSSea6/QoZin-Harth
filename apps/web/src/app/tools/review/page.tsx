@@ -11,6 +11,7 @@ import { timeAgo } from '@/lib/format'
 import { useLoad, useRequireSession } from '@/lib/hooks'
 import { VERSION_STATUS, type VersionStatus } from '@/lib/tool-status'
 import { DeveloperAdmin } from './developers'
+import { GovernanceAdmin } from './governance'
 
 interface ReviewItem {
   id: string
@@ -79,6 +80,7 @@ export default function ReviewQueuePage() {
         </Panel>
       )}
 
+      {data && <GovernanceAdmin />}
       {data && <DeveloperAdmin />}
     </Columns>
   )

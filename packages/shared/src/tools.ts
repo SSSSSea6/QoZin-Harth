@@ -52,6 +52,7 @@ export const TOOL_RUN_ERROR_CODES = {
   TIMEOUT: '总时长超时',
   BUDGET: '超出调用或写入额度',
   QUOTA: '开发者本月燃料已用完',
+  SUSPENDED: '工具已被停用',
   ACTION_MISSING: '动作不存在',
   FORBIDDEN: '没有权限',
   HOST_ERROR: '平台接口出错',

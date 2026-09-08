@@ -93,7 +93,7 @@ export const toolStaticApp = new Hono()
     const slug = c.req.param('slug')
     const tool = await getTool(slug)
     const version = tool ? await currentVersion(tool) : null
-    if (!tool || !version) return c.text('工具不存在或还没上架', 404)
+    if (!tool || !version || tool.suspendedAt) return c.text('工具不存在或还没上架', 404)
     return servePackageFile(c, tool.id, version.id, version.manifest as ToolManifest, `/t/${slug}/`)
   })
 

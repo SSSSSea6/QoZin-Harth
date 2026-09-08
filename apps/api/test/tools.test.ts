@@ -2,7 +2,7 @@ import { strToU8, zipSync } from 'fflate'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { app } from '../src/app'
 import { seed } from '../src/db/seed'
-import { becomeAdmin, makeDeveloper, TestUser } from './helpers'
+import { becomeAdmin, consentTool, makeDeveloper, TestUser } from './helpers'
 
 const admin = new TestUser('管理员')
 const dev = new TestUser('开发者')
@@ -120,6 +120,7 @@ describe('安装与令牌', () => {
     const list = await member.json<{ tools: { slug: string; scopes: string[] }[] }>(`/api/circles/${circleA}/tools`)
     expect(list.body.tools.map((t) => t.slug)).toEqual(['roll-call'])
 
+    await consentTool(member, circleA, 'roll-call')
     const token = await member.post<{ token: string; context: { scopes: string[]; entryUrl: string } }>(
       `/api/circles/${circleA}/tools/roll-call/token`,
     )
@@ -152,6 +153,7 @@ describe('安装与令牌', () => {
     expect((listed.body.items as { key: string }[]).map((i) => i.key)).toEqual(['count'])
 
     await owner.post(`/api/circles/${circleB}/tools/roll-call`)
+    await consentTool(owner, circleB, 'roll-call')
     const tokenB = (await owner.post<{ token: string }>(`/api/circles/${circleB}/tools/roll-call/token`)).body.token
     expect((await toolApi(tokenB, '/storage/count')).status).toBe(404)
   })
@@ -179,6 +181,7 @@ describe('安装与令牌', () => {
     expect((await owner.delete(`/api/circles/${circleA}/tools/roll-call`)).status).toBe(200)
     expect((await toolApi(tokenA, '/storage/count')).status).toBe(403)
     await owner.post(`/api/circles/${circleA}/tools/roll-call`)
+    await consentTool(member, circleA, 'roll-call')
     const fresh = (await member.post<{ token: string }>(`/api/circles/${circleA}/tools/roll-call/token`)).body.token
     expect((await toolApi(fresh, '/storage/count')).status).toBe(404)
   })

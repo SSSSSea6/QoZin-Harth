@@ -15,7 +15,7 @@ import { db } from '../src/db'
 import { developerInvites, fuelAccounts, toolUsage } from '../src/db/schema'
 import { seed } from '../src/db/seed'
 import { chargeFuel } from '../src/tools/fuel'
-import { becomeAdmin, makeDeveloper, TestUser } from './helpers'
+import { becomeAdmin, consentTool, makeDeveloper, TestUser } from './helpers'
 
 const admin = new TestUser('管理员三')
 const alice = new TestUser('阿丽')
@@ -99,6 +99,7 @@ async function setUsed(ownerId: string, used: number) {
 }
 
 async function memberToken(): Promise<string> {
+  await consentTool(owner, circleId, SLUG)
   const res = await owner.post<{ token: string }>(`/api/circles/${circleId}/tools/${SLUG}/token`)
   expect(res.status).toBe(200)
   return res.body.token

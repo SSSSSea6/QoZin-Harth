@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { LeftNav } from '@/components/left-nav'
+import { RestrictedPage } from '@/components/restricted'
 import { useSession } from '@/lib/auth-client'
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -11,6 +12,16 @@ export function Shell({ children }: { children: ReactNode }) {
     return (
       <div className="mx-auto w-full max-w-[1120px] flex-1 px-4 py-6">
         <main className="min-w-0">{children}</main>
+      </div>
+    )
+  }
+
+  if (session.user.restriction?.kind === 'ban') {
+    return (
+      <div className="mx-auto w-full max-w-[1120px] flex-1 px-4 py-6">
+        <main className="min-w-0">
+          <RestrictedPage reason={session.user.restriction.reason} />
+        </main>
       </div>
     )
   }

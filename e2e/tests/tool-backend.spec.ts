@@ -45,6 +45,7 @@ test('后端工具：安装页看到时间表 → 圈内调用后端 → 定时�
   await ownerPage.getByRole('tab', { name: '工具' }).click()
   await expect(ownerPage.getByText('定时：每个工作日 08:00 运行 remind')).toBeVisible()
   await ownerPage.getByRole('link', { name }).first().click()
+  await ownerPage.getByRole('button', { name: '同意并打开' }).click()
   const frame = ownerPage.frameLocator(`iframe[title="${name}"]`)
   await expect(frame.getByText('后端计数 1')).toBeVisible()
   await ownerPage.reload()

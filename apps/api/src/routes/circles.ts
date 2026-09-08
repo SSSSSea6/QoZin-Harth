@@ -8,13 +8,16 @@ import {
   templateKeySchema,
 } from '@harth/shared'
 import { zValidator } from '@hono/zod-validator'
-import { and, count, desc, eq, inArray, isNull, lt } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, isNull, lt, ne } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
+import { assertNotBlocked } from '../domain/blocks'
 import { assertCanSpeak } from '../domain/policy'
+import { assertContentAllowed, flagIfMatched } from '../domain/rules'
+import { HIDDEN_PLACEHOLDER } from '../domain/visibility'
 import {
   circleParents,
   circles,
@@ -121,6 +124,7 @@ export const circlesApp = new Hono<AppEnv>()
     const userId = c.get('user')!.id
     await assertCanSpeak(db, userId)
     const input = c.req.valid('json')
+    await assertContentAllowed(input.name)
 
     const parentIds = [...new Set(input.parentIds)]
     const parents = await db
@@ -192,6 +196,7 @@ export const circlesApp = new Hono<AppEnv>()
         .where(eq(user.id, target))
         .limit(1)
       if (!targetUser[0]) throw new HTTPException(404, { message: '用户不存在' })
+      await assertNotBlocked(me, target)
 
       const dmKey = [me, target].sort().join(':')
       const existing = await db
@@ -453,13 +458,18 @@ export const circlesApp = new Hono<AppEnv>()
           createdAt: messages.createdAt,
           authorId: user.id,
           authorName: user.name,
+          hiddenAt: messages.hiddenAt,
         })
         .from(messages)
         .innerJoin(user, eq(messages.authorId, user.id))
         .where(and(...conditions))
         .orderBy(desc(messages.createdAt))
         .limit(limit)
-      return c.json({ messages: rows })
+      return c.json({
+        messages: rows.map(({ hiddenAt, ...m }) =>
+          hiddenAt && m.authorId !== userId ? { ...m, content: HIDDEN_PLACEHOLDER, hidden: true } : { ...m, hidden: hiddenAt !== null },
+        ),
+      })
     },
   )
 
@@ -470,7 +480,14 @@ export const circlesApp = new Hono<AppEnv>()
     assertDm(circle)
     assertNotArchived(circle)
     await mustGetMembership(circle.id, userId)
+    const [other] = await db
+      .select({ userId: memberships.userId })
+      .from(memberships)
+      .where(and(eq(memberships.circleId, circle.id), ne(memberships.userId, userId)))
+      .limit(1)
+    if (other) await assertNotBlocked(userId, other.userId)
     const input = c.req.valid('json')
+    await assertContentAllowed(input.content)
     const [row] = await db
       .insert(messages)
       .values({
@@ -481,5 +498,6 @@ export const circlesApp = new Hono<AppEnv>()
       })
       .returning()
     await touchCircle(circle.id)
+    await flagIfMatched('message', row!.id, row!.content, row!.content)
     return c.json({ message: row }, 201)
   })

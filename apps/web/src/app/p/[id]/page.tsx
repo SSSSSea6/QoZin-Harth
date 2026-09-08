@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { Avatar } from '@/components/avatar'
 import { GateError } from '@/components/gate-error'
+import { ItemMenu } from '@/components/item-menu'
 import { Columns } from '@/components/columns'
 import { Panel, PanelHeader } from '@/components/panel'
 import { PostStatusBadge } from '@/components/post-status'
@@ -47,8 +48,11 @@ interface PostDetail {
     createdAt: string
     authorId: string
     authorName: string
+    hidden?: boolean
   }[]
   reviewedByMe: boolean
+  hidden?: boolean
+  hiddenReason?: string | null
 }
 
 export default function PostPage() {
@@ -85,6 +89,13 @@ export default function PostPage() {
     )
   }
 
+  if (post.hidden && !post.title) {
+    return (
+      <Panel>
+        <p className="py-8 text-center text-sm text-muted-foreground">这条内容已被处理，不再展示。</p>
+      </Panel>
+    )
+  }
   const isSecondhand = post.templateKey === 'secondhand'
   const body = String(
     (isSecondhand ? post.fields.description : post.fields.body) ?? '',
@@ -105,7 +116,13 @@ export default function PostPage() {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <h1 className="text-[22px] font-semibold leading-8 md:text-2xl md:leading-[34px]">{post.title}</h1>
           {isSecondhand && <PostStatusBadge status={post.status} />}
+          {post.author && <ItemMenu targetType="post" targetId={post.id} subjectId={post.author.id} className="ml-auto" />}
         </div>
+        {post.hidden && (
+          <p className="mt-3 rounded-md border px-3 py-2 text-sm text-muted-foreground">
+            这条帖子已被隐藏，其他人看不到{post.hiddenReason ? `：${post.hiddenReason}` : ''}。可在个人页申诉。
+          </p>
+        )}
         <div className="mt-3 flex items-center gap-2.5 text-[13px] text-muted-foreground">
           {post.author ? (
             <>
@@ -315,8 +332,9 @@ function CommentsPanel({
                     {c.authorName}
                   </Link>
                   <time dateTime={c.createdAt}>{timeAgo(c.createdAt)}</time>
+                  {!c.hidden && <ItemMenu targetType="comment" targetId={c.id} subjectId={c.authorId} className="ml-auto" onBlocked={onChanged} />}
                 </div>
-                <p className="mt-1 whitespace-pre-wrap break-words text-base leading-relaxed">
+                <p className={`mt-1 whitespace-pre-wrap break-words text-base leading-relaxed${c.hidden ? ' italic text-muted-foreground' : ''}`}>
                   {c.content}
                 </p>
               </div>

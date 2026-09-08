@@ -1,27 +1,14 @@
-import {
-  FUEL_RATES,
-  fuelForStorageWrite,
-  parsePostFields,
-  TOOL_ACTION_INPUT_MAX_BYTES,
-  TOOL_RUN_ERROR_CODES,
-  TOOL_RUN_LIMITS,
-  TOOL_STORAGE_MAX_KEYS,
-  TOOL_STORAGE_VALUE_MAX_BYTES,
-  toolActionNameSchema,
-  toolStorageKeySchema,
-  toolStorageWriteSchema,
-  type ToolManifest,
-  type ToolRunErrorCode,
-  type ToolScope,
-} from '@harth/shared'
+import { FUEL_RATES, fuelForStorageWrite, GOVERNANCE_ERROR_CODES, parsePostFields, TOOL_ACTION_INPUT_MAX_BYTES, TOOL_RUN_ERROR_CODES, TOOL_RUN_LIMITS, TOOL_STORAGE_MAX_KEYS, TOOL_STORAGE_VALUE_MAX_BYTES, toolActionNameSchema, type ToolManifest, type ToolRunErrorCode, type ToolScope, toolStorageKeySchema, toolStorageWriteSchema } from '@harth/shared'
 import { zValidator } from '@hono/zod-validator'
-import { and, asc, count, desc, eq, like } from 'drizzle-orm'
+import { and, asc, count, desc, eq, isNull, like } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createMiddleware } from 'hono/factory'
 import { HTTPException } from 'hono/http-exception'
+import { fail } from '../http'
 import { z } from 'zod'
 import { db } from '../db'
+import { consentedUserIds, hasConsent } from '../domain/consent'
 import { assertActive, assertCanSpeak } from '../domain/policy'
 import { user } from '../db/auth-schema'
 import { circles, circleTools, memberships, posts, toolDevSessions, tools, toolStorage } from '../db/schema'
@@ -100,11 +87,17 @@ const authenticate = createMiddleware<ToolEnv>(async (c, next) => {
     }
     grant.scopes = payload.scopes.filter((scope) => installed.scopes.includes(scope))
   }
-  // 令牌没过期不等于人还在圈里、账号还正常，每次按当前状态复核
+  // 令牌没过期不等于工具还在、人还在圈里、账号还正常，每次按当前状态复核
+  const [toolRow] = await db.select({ suspendedAt: tools.suspendedAt }).from(tools).where(eq(tools.id, grant.toolId)).limit(1)
+  if (!toolRow || toolRow.suspendedAt) throw fail(403, 'SUSPENDED', TOOL_RUN_ERROR_CODES.SUSPENDED)
   if (grant.userId) {
     await assertActive(db, grant.userId)
     if (!(await getMembership(grant.circleId, grant.userId))) {
       throw new HTTPException(403, { message: '你已不在这个圈子里' })
+    }
+    // 撤回授权后旧令牌立即失效
+    if (grant.kind === 'install' && !(await hasConsent(grant.userId, grant.toolId, grant.circleId, grant.scopes))) {
+      throw fail(403, 'CONSENT_REQUIRED', GOVERNANCE_ERROR_CODES.CONSENT_REQUIRED)
     }
   }
   c.set('grant', grant)
@@ -275,19 +268,22 @@ export const toolApiApp = new Hono<ToolEnv>()
     return c.json({ circle: { ...circle!, memberCount: members?.value ?? 0 } })
   })
 
+  // 只给同意过这个工具的成员；没同意的人对工具来说不存在
   .get('/members', need('members.read'), limited('read'), async (c) => {
-    const { circleId } = c.get('grant')
+    const { circleId, toolId } = c.get('grant')
+    const consented = await consentedUserIds(toolId, circleId)
     const rows = await db
       .select({ id: user.id, name: user.name, role: memberships.role, joinedAt: memberships.joinedAt })
       .from(memberships)
       .innerJoin(user, eq(memberships.userId, user.id))
       .where(eq(memberships.circleId, circleId))
       .orderBy(memberships.joinedAt)
-    return c.json({ members: rows })
+    return c.json({ members: rows.filter((m) => consented.has(m.id)) })
   })
 
   .get('/posts', need('posts.read'), limited('read'), async (c) => {
-    const { circleId } = c.get('grant')
+    const { circleId, toolId } = c.get('grant')
+    const consented = await consentedUserIds(toolId, circleId)
     const rows = await db
       .select({
         id: posts.id,
@@ -301,10 +297,13 @@ export const toolApiApp = new Hono<ToolEnv>()
       })
       .from(posts)
       .leftJoin(user, eq(posts.authorId, user.id))
-      .where(eq(posts.circleId, circleId))
+      .where(and(eq(posts.circleId, circleId), isNull(posts.hiddenAt)))
       .orderBy(desc(posts.createdAt))
       .limit(50)
-    return c.json({ posts: rows })
+    // 没同意的作者只留占位，不给 id 和昵称
+    return c.json({
+      posts: rows.map((p) => (p.authorId && !consented.has(p.authorId) ? { ...p, authorId: null, authorName: '成员' } : p)),
+    })
   })
 
   // 定时运行发的帖没有作者，只记工具；工具触发的写入不算圈子活跃

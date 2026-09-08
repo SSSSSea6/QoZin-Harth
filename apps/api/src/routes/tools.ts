@@ -1,16 +1,9 @@
-import {
-  TOOL_BACKEND_MAX_BYTES,
-  TOOL_PACKAGE_MAX_BYTES,
-  TOOL_RUN_LIMITS,
-  toolActionNameSchema,
-  toolManifestSchema,
-  toolSlugSchema,
-  type ToolManifest,
-} from '@harth/shared'
+import { TOOL_BACKEND_MAX_BYTES, TOOL_PACKAGE_MAX_BYTES, TOOL_RUN_ERROR_CODES, TOOL_RUN_LIMITS, toolActionNameSchema, toolManifestSchema, toolSlugSchema, type ToolManifest } from '@harth/shared'
 import { zValidator } from '@hono/zod-validator'
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
+import { fail } from '../http'
 import { z } from 'zod'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
@@ -148,7 +141,7 @@ export const toolsApp = new Hono<AppEnv>()
       .select({ tool: tools, version: toolVersions })
       .from(tools)
       .innerJoin(toolVersions, eq(tools.currentVersionId, toolVersions.id))
-      .where(isNotNull(tools.currentVersionId))
+      .where(and(isNotNull(tools.currentVersionId), isNull(tools.suspendedAt)))
       .orderBy(desc(toolVersions.reviewedAt))
     return c.json({
       tools: rows.map(({ tool, version }) => {
@@ -428,6 +421,7 @@ export const toolsApp = new Hono<AppEnv>()
     const tool = await getTool(c.req.valid('param').slug)
     const version = tool ? await currentVersion(tool) : null
     if (!tool || !version) throw new HTTPException(404, { message: '工具不存在或还没上架' })
+    if (tool.suspendedAt) throw fail(404, 'SUSPENDED', TOOL_RUN_ERROR_CODES.SUSPENDED)
     const manifest = manifestOf(version.manifest)
 
     const owned = await db

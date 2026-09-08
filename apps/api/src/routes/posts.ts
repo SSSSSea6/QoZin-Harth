@@ -14,7 +14,11 @@ import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
+import { hiddenReasonOf } from '../domain/governance'
 import { assertCanSpeak } from '../domain/policy'
+import { assertContentAllowed, flagIfMatched } from '../domain/rules'
+import { HIDDEN_PLACEHOLDER, notBlockedBy, visibleTo } from '../domain/visibility'
+import { isAdmin } from '../env'
 import {
   circles,
   circleTemplates,
@@ -36,8 +40,8 @@ import type { AppEnv } from '../types'
 
 type PostRow = typeof posts.$inferSelect
 
-const commentCount = sql<number>`(select count(*) from ${comments} where ${comments.postId} = ${posts.id})`.mapWith(Number)
-const responseCount = sql<number>`(select count(*) from ${responses} where ${responses.postId} = ${posts.id})`.mapWith(Number)
+const commentCount = sql<number>`(select count(*) from ${comments} where ${comments.postId} = ${posts.id} and ${comments.hiddenAt} is null)`.mapWith(Number)
+const responseCount = sql<number>`(select count(*) from ${responses} where ${responses.postId} = ${posts.id} and ${responses.hiddenAt} is null)`.mapWith(Number)
 
 // 定时运行发的帖没有作者，列表用工具名显示
 const listColumns = {
@@ -106,7 +110,7 @@ export const postsApp = new Hono<AppEnv>()
         .innerJoin(circles, eq(circles.id, posts.circleId))
         .leftJoin(user, eq(posts.authorId, user.id))
         .leftJoin(tools, eq(posts.toolId, tools.id))
-        .where(anchor ? lt(posts.createdAt, anchor) : undefined)
+        .where(and(anchor ? lt(posts.createdAt, anchor) : undefined, visibleTo(userId, posts.hiddenAt, posts.authorId)))
         .orderBy(desc(posts.createdAt))
         .limit(30)
       return c.json({ posts: rows })
@@ -146,6 +150,8 @@ export const postsApp = new Hono<AppEnv>()
       if (!parsed) {
         throw new HTTPException(400, { message: '字段不完整或不合法' })
       }
+      const texts = [parsed.title, ...Object.values(parsed.fields).filter((v): v is string => typeof v === 'string')]
+      await assertContentAllowed(...texts)
 
       const [post] = await db
         .insert(posts)
@@ -158,6 +164,7 @@ export const postsApp = new Hono<AppEnv>()
         })
         .returning()
       await touchCircle(circle.id)
+      await flagIfMatched('post', post!.id, parsed.title, ...texts)
       return c.json({ post: { id: post!.id } }, 201)
     },
   )
@@ -178,7 +185,7 @@ export const postsApp = new Hono<AppEnv>()
       const { templateKey, before } = c.req.valid('query')
       const anchor = before ? await createdAtOf(before) : null
 
-      const conditions = [eq(posts.circleId, circle.id)]
+      const conditions = [eq(posts.circleId, circle.id), visibleTo(userId, posts.hiddenAt, posts.authorId)]
       if (templateKey) conditions.push(eq(posts.templateKey, templateKey))
       if (anchor) conditions.push(lt(posts.createdAt, anchor))
 
@@ -203,6 +210,10 @@ export const postsApp = new Hono<AppEnv>()
     await mustGetMembership(circle.id, userId)
 
     const isAuthor = post.authorId === userId
+    if (post.hiddenAt && !isAuthor && !isAdmin({ id: userId })) {
+      return c.json({ post: { id: post.id, circleId: post.circleId, hidden: true as const } })
+    }
+    const hiddenReason = post.hiddenModerationId ? await hiddenReasonOf(post.hiddenModerationId) : null
     const responderId = await matchedResponderId(post)
 
     const allResponses = await db
@@ -212,15 +223,16 @@ export const postsApp = new Hono<AppEnv>()
         createdAt: responses.createdAt,
         responderId: user.id,
         responderName: user.name,
+        hiddenAt: responses.hiddenAt,
       })
       .from(responses)
       .innerJoin(user, eq(responses.responderId, user.id))
       .where(eq(responses.postId, post.id))
       .orderBy(responses.createdAt)
 
-    const visibleResponses = isAuthor
-      ? allResponses
-      : allResponses.filter((r) => r.responderId === userId)
+    const visibleResponses = (isAuthor ? allResponses : allResponses.filter((r) => r.responderId === userId)).map(({ hiddenAt, ...r }) =>
+      hiddenAt && r.responderId !== userId ? { ...r, message: HIDDEN_PLACEHOLDER, hidden: true } : { ...r, hidden: hiddenAt !== null },
+    )
 
     const postComments = await db
       .select({
@@ -229,10 +241,11 @@ export const postsApp = new Hono<AppEnv>()
         createdAt: comments.createdAt,
         authorId: user.id,
         authorName: user.name,
+        hiddenAt: comments.hiddenAt,
       })
       .from(comments)
       .innerJoin(user, eq(comments.authorId, user.id))
-      .where(eq(comments.postId, post.id))
+      .where(and(eq(comments.postId, post.id), notBlockedBy(userId, comments.authorId)))
       .orderBy(comments.createdAt)
 
     const [author] = post.authorId
@@ -270,7 +283,11 @@ export const postsApp = new Hono<AppEnv>()
         completedAt: post.completedAt,
         responseCount: allResponses.length,
         responses: visibleResponses,
-        comments: postComments,
+        comments: postComments.map(({ hiddenAt, ...comment }) =>
+          hiddenAt && comment.authorId !== userId ? { ...comment, content: HIDDEN_PLACEHOLDER, hidden: true } : { ...comment, hidden: hiddenAt !== null },
+        ),
+        hidden: post.hiddenAt !== null,
+        hiddenReason,
         reviewedByMe: myReview.length > 0,
       },
     })
@@ -284,11 +301,13 @@ export const postsApp = new Hono<AppEnv>()
     assertNotArchived(circle)
     await mustGetMembership(circle.id, userId)
     const { content } = c.req.valid('json')
+    await assertContentAllowed(content)
     const [row] = await db
       .insert(comments)
       .values({ postId: post.id, authorId: userId, content })
       .returning()
     await touchCircle(circle.id)
+    await flagIfMatched('comment', row!.id, content, content)
     return c.json({ comment: { id: row!.id } }, 201)
   })
 
@@ -309,6 +328,7 @@ export const postsApp = new Hono<AppEnv>()
       throw new HTTPException(400, { message: '不能应答自己的帖子' })
     }
     const { message } = c.req.valid('json')
+    await assertContentAllowed(message)
     const inserted = await db
       .insert(responses)
       .values({ postId: post.id, responderId: userId, message })
@@ -318,6 +338,7 @@ export const postsApp = new Hono<AppEnv>()
       throw new HTTPException(409, { message: '你已经应答过了' })
     }
     await touchCircle(circle.id)
+    await flagIfMatched('response', inserted[0].id, message, message)
     return c.json({ response: { id: inserted[0].id } }, 201)
   })
 
@@ -413,6 +434,7 @@ export const postsApp = new Hono<AppEnv>()
     else throw new HTTPException(403, { message: '只有交易双方能互评' })
 
     const { rating, comment } = c.req.valid('json')
+    await assertContentAllowed(comment)
     const inserted = await db
       .insert(reviews)
       .values({
@@ -427,5 +449,6 @@ export const postsApp = new Hono<AppEnv>()
     if (!inserted[0]) {
       throw new HTTPException(409, { message: '你已经评价过了' })
     }
+    if (comment) await flagIfMatched('review', inserted[0].id, comment, comment)
     return c.json({ review: { id: inserted[0].id } }, 201)
   })

@@ -3,7 +3,7 @@ import { strToU8, zipSync } from 'fflate'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { app } from '../src/app'
 import { seed } from '../src/db/seed'
-import { becomeAdmin, makeDeveloper, TestUser } from './helpers'
+import { becomeAdmin, consentTool, makeDeveloper, TestUser } from './helpers'
 
 const admin = new TestUser('管理员')
 const dev = new TestUser('开发者')
@@ -219,6 +219,7 @@ describe('安装、调用与限额', () => {
     expect(installed.hasBackend).toBe(true)
     expect(installed.needsConfirm).toBe(false)
     expect(installed.schedules.map((s) => s.name)).toEqual(['morning'])
+    await consentTool(member, circleId, SLUG)
     const token = await member.post<{ token: string }>(`/api/circles/${circleId}/tools/${SLUG}/token`)
     memberToken = token.body.token
   })
@@ -346,6 +347,7 @@ describe('授权变化', () => {
 
     expect((await owner.post(`/api/circles/${circleId}/tools/${SLUG}`)).status).toBe(201)
     expect((await call(memberToken, 'tally')).status).toBe(403)
+    await consentTool(member, circleId, SLUG)
     const fresh = (await member.post<{ token: string }>(`/api/circles/${circleId}/tools/${SLUG}/token`)).body.token
     memberToken = fresh
     expect((await call(memberToken, 'tally')).status).toBe(200)

@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils'
 export interface ToolGrant {
   token: string
   expiresAt: number
-  // 开发者只给宿主页做反馈入口用，不下发给 iframe
+  // 工具 id 与开发者只给宿主页用（举报、反馈），不下发给 iframe
+  toolId?: string
   developer?: { id: string; name: string } | null
   context: {
     user: { id: string; name: string }

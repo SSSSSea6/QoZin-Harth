@@ -6,7 +6,10 @@ import { env } from './env'
 import { enforceRestrictions, sessionMiddleware } from './middleware/session'
 import { circleToolsApp } from './routes/circle-tools'
 import { circlesApp } from './routes/circles'
+import { adminApp } from './routes/admin'
+import { appealsApp } from './routes/appeals'
 import { developersApp } from './routes/developers'
+import { reportsApp } from './routes/reports'
 import { postsApp } from './routes/posts'
 import { testHooksApp } from './routes/test-hooks'
 import { toolApiApp } from './routes/tool-api'
@@ -34,6 +37,9 @@ export const app = new Hono()
   .route('/api/users', usersApp)
   .route('/api/tools', toolsApp)
   .route('/api/developers', developersApp)
+  .route('/api/reports', reportsApp)
+  .route('/api/appeals', appealsApp)
+  .route('/api/admin', adminApp)
 
 if (env.TEST_HOOKS) {
   app.route('/api/test', testHooksApp)

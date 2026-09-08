@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, ne, or } from 'drizzle-orm'
 import { db } from '../db'
 import { account, deviceCode, session, user } from '../db/auth-schema'
 import {
+  appeals,
   circles,
   comments,
   developerApplications,
@@ -9,13 +10,19 @@ import {
   fuelAccounts,
   memberships,
   messages,
+  moderations,
   posts,
+  reports,
   responses,
   reviews,
+  smsSends,
+  toolConsents,
   toolDevSessions,
   tools,
   toolUsage,
   toolVersions,
+  userBlocks,
+  userRestrictions,
 } from '../db/schema'
 import { closeDeveloperOnDeletion, myInvites } from './developers'
 
@@ -23,7 +30,14 @@ export const DELETED_USER_NAME = '已注销用户'
 
 export async function exportAccount(userId: string) {
   const [me] = await db
-    .select({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt })
+    .select({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+      phoneNumberVerified: user.phoneNumberVerified,
+      createdAt: user.createdAt,
+    })
     .from(user)
     .where(eq(user.id, userId))
   const sessions = await db
@@ -102,6 +116,57 @@ export async function exportAccount(userId: string) {
     .from(fuelAccounts)
     .where(eq(fuelAccounts.ownerId, userId))
   const usage = await db.select().from(toolUsage).where(eq(toolUsage.ownerId, userId))
+  const blocks = await db
+    .select({ blockedId: userBlocks.blockedId, createdAt: userBlocks.createdAt })
+    .from(userBlocks)
+    .where(eq(userBlocks.blockerId, userId))
+  // 举报只导出自己提交的；被举报的记录属于举报人，不给
+  const reportsFiled = await db
+    .select({
+      id: reports.id,
+      targetType: reports.targetType,
+      targetId: reports.targetId,
+      reason: reports.reason,
+      detail: reports.detail,
+      status: reports.status,
+      createdAt: reports.createdAt,
+      handledAt: reports.handledAt,
+    })
+    .from(reports)
+    .where(eq(reports.reporterId, userId))
+  const moderationsAgainstMe = await db
+    .select({
+      id: moderations.id,
+      action: moderations.action,
+      targetType: moderations.targetType,
+      targetId: moderations.targetId,
+      reason: moderations.reason,
+      until: moderations.until,
+      reversalOf: moderations.reversalOf,
+      createdAt: moderations.createdAt,
+    })
+    .from(moderations)
+    .where(eq(moderations.subjectUserId, userId))
+  const myAppeals = await db
+    .select({
+      id: appeals.id,
+      moderationId: appeals.moderationId,
+      text: appeals.text,
+      status: appeals.status,
+      note: appeals.note,
+      createdAt: appeals.createdAt,
+      decidedAt: appeals.decidedAt,
+    })
+    .from(appeals)
+    .where(eq(appeals.userId, userId))
+  const consents = await db
+    .select({ toolId: toolConsents.toolId, circleId: toolConsents.circleId, scopes: toolConsents.scopes, consentedAt: toolConsents.consentedAt, revokedAt: toolConsents.revokedAt })
+    .from(toolConsents)
+    .where(eq(toolConsents.userId, userId))
+  const [restriction] = await db
+    .select({ kind: userRestrictions.kind, until: userRestrictions.until, reason: userRestrictions.reason, createdAt: userRestrictions.createdAt })
+    .from(userRestrictions)
+    .where(eq(userRestrictions.userId, userId))
 
   return {
     exportedAt: new Date().toISOString(),
@@ -120,6 +185,12 @@ export async function exportAccount(userId: string) {
     invites,
     fuel,
     usage,
+    blocks,
+    reports: reportsFiled,
+    moderations: moderationsAgainstMe,
+    appeals: myAppeals,
+    restriction: restriction ?? null,
+    consents,
   }
 }
 
@@ -172,6 +243,10 @@ export async function deleteAccount(userId: string): Promise<void> {
     await tx.delete(deviceCode).where(eq(deviceCode.userId, userId))
     await tx.delete(session).where(eq(session.userId, userId))
     await tx.delete(account).where(eq(account.userId, userId))
+    // 屏蔽关系与发码记录随人删除；举报与处置记录保留作审核依据，人已匿名
+    await tx.delete(userBlocks).where(or(eq(userBlocks.blockerId, userId), eq(userBlocks.blockedId, userId)))
+    await tx.delete(smsSends).where(eq(smsSends.userId, userId))
+    await tx.delete(toolConsents).where(eq(toolConsents.userId, userId))
     await tx
       .update(user)
       .set({
@@ -179,6 +254,8 @@ export async function deleteAccount(userId: string): Promise<void> {
         email: `deleted-${userId}@invalid`,
         emailVerified: false,
         image: null,
+        phoneNumber: null,
+        phoneNumberVerified: null,
       })
       .where(eq(user.id, userId))
   })

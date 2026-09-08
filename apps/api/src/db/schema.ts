@@ -120,6 +120,8 @@ export const messages = pgTable(
       .references(() => user.id),
     content: text('content').notNull(),
     replyToId: text('reply_to_id'),
+    hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+    hiddenModerationId: text('hidden_moderation_id'),
     createdAt: createdAt(),
   },
   (t) => [index('message_circle_created_idx').on(t.circleId, t.createdAt)],
@@ -150,6 +152,8 @@ export const posts = pgTable(
       withTimezone: true,
     }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
+    hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+    hiddenModerationId: text('hidden_moderation_id'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -169,6 +173,8 @@ export const responses = pgTable(
       .notNull()
       .references(() => user.id),
     message: text('message').notNull(),
+    hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+    hiddenModerationId: text('hidden_moderation_id'),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('response_post_responder_uidx').on(t.postId, t.responderId)],
@@ -190,6 +196,8 @@ export const reviews = pgTable(
       .references(() => user.id),
     rating: integer('rating').notNull(),
     comment: text('comment'),
+    hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+    hiddenModerationId: text('hidden_moderation_id'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -209,6 +217,8 @@ export const comments = pgTable(
       .notNull()
       .references(() => user.id),
     content: text('content').notNull(),
+    hiddenAt: timestamp('hidden_at', { withTimezone: true }),
+    hiddenModerationId: text('hidden_moderation_id'),
     createdAt: createdAt(),
   },
   (t) => [index('comment_post_created_idx').on(t.postId, t.createdAt)],
@@ -222,6 +232,7 @@ export const tools = pgTable('tool', {
     .notNull()
     .references(() => user.id),
   currentVersionId: text('current_version_id'),
+  suspendedAt: timestamp('suspended_at', { withTimezone: true }),
   createdAt: createdAt(),
 })
 
@@ -512,5 +523,153 @@ export const userRestrictions = pgTable(
   (t) => [
     check('user_restriction_kind', sql`${t.kind} IN ('mute', 'ban')`),
     check('user_restriction_mute_until', sql`${t.kind} <> 'mute' OR ${t.until} IS NOT NULL`),
+  ],
+)
+
+export const REPORT_TARGETS = ['post', 'comment', 'response', 'review', 'message', 'user', 'tool', 'circle'] as const
+export const MODERATION_ACTIONS = ['hide', 'restore', 'mute', 'unmute', 'ban', 'unban', 'tool_suspend', 'tool_restore'] as const
+
+// 举报：同人同目标只能有一条待处理；规则命中的自动举报 reporter 为空
+export const reports = pgTable(
+  'report',
+  {
+    id: id(),
+    reporterId: text('reporter_id').references(() => user.id),
+    targetType: text('target_type', { enum: REPORT_TARGETS }).notNull(),
+    targetId: text('target_id').notNull(),
+    reason: text('reason', { enum: ['spam', 'abuse', 'illegal', 'privacy', 'rule', 'other'] }).notNull(),
+    detail: text('detail'),
+    status: text('status', { enum: ['pending', 'handled', 'dismissed'] })
+      .notNull()
+      .default('pending'),
+    snapshot: text('snapshot'),
+    handledBy: text('handled_by').references(() => user.id),
+    handledAt: timestamp('handled_at', { withTimezone: true }),
+    moderationId: text('moderation_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('report_pending_uidx')
+      .on(t.reporterId, t.targetType, t.targetId)
+      .where(sql`${t.status} = 'pending' AND ${t.reporterId} IS NOT NULL`),
+    uniqueIndex('report_rule_pending_uidx')
+      .on(t.targetType, t.targetId)
+      .where(sql`${t.status} = 'pending' AND ${t.reporterId} IS NULL`),
+    index('report_status_idx').on(t.status, t.createdAt, t.id),
+    index('report_reporter_idx').on(t.reporterId, t.createdAt, t.id),
+    check('report_status', sql`${t.status} IN ('pending', 'handled', 'dismissed')`),
+  ],
+)
+
+export const userBlocks = pgTable(
+  'user_block',
+  {
+    blockerId: text('blocker_id')
+      .notNull()
+      .references(() => user.id),
+    blockedId: text('blocked_id')
+      .notNull()
+      .references(() => user.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.blockerId, t.blockedId] }),
+    index('user_block_blocked_idx').on(t.blockedId, t.blockerId),
+    check('user_block_not_self', sql`${t.blockerId} <> ${t.blockedId}`),
+  ],
+)
+
+// 处置的审计记录，只增不改；撤销是再写一条并指向原记录
+export const moderations = pgTable(
+  'moderation',
+  {
+    id: id(),
+    action: text('action', { enum: MODERATION_ACTIONS }).notNull(),
+    targetType: text('target_type', { enum: REPORT_TARGETS }).notNull(),
+    targetId: text('target_id').notNull(),
+    subjectUserId: text('subject_user_id').references(() => user.id),
+    reportId: text('report_id'),
+    reason: text('reason').notNull(),
+    until: timestamp('until', { withTimezone: true }),
+    by: text('by')
+      .notNull()
+      .references(() => user.id),
+    reversalOf: text('reversal_of'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('moderation_target_idx').on(t.targetType, t.targetId, t.createdAt, t.id),
+    index('moderation_subject_idx').on(t.subjectUserId, t.createdAt, t.id),
+    check('moderation_action', sql`${t.action} IN ('hide', 'restore', 'mute', 'unmute', 'ban', 'unban', 'tool_suspend', 'tool_restore')`),
+  ],
+)
+
+export const appeals = pgTable(
+  'appeal',
+  {
+    id: id(),
+    moderationId: text('moderation_id').notNull().unique(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    text: text('text').notNull(),
+    status: text('status', { enum: ['pending', 'accepted', 'rejected'] })
+      .notNull()
+      .default('pending'),
+    decidedBy: text('decided_by').references(() => user.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('appeal_status_idx').on(t.status, t.createdAt, t.id),
+    check('appeal_status', sql`${t.status} IN ('pending', 'accepted', 'rejected')`),
+  ],
+)
+
+// 内容规则：reject 直接拒绝，flag 自动进举报队列
+export const contentRules = pgTable(
+  'content_rule',
+  {
+    id: id(),
+    pattern: text('pattern').notNull(),
+    kind: text('kind', { enum: ['reject', 'flag'] }).notNull(),
+    note: text('note'),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id),
+    createdAt: createdAt(),
+  },
+  (t) => [check('content_rule_kind', sql`${t.kind} IN ('reject', 'flag')`)],
+)
+
+// 封禁期间同号不能重新绑定：只存号码指纹，解封或到期即删
+export const bannedPhones = pgTable('banned_phone', {
+  phoneHmac: text('phone_hmac').primaryKey(),
+  moderationId: text('moderation_id').notNull(),
+  until: timestamp('until', { withTimezone: true }),
+  createdAt: createdAt(),
+})
+
+// 成员对某个圈里某个工具的数据授权：记排序后的权限全文，新增权限要重新问
+export const toolConsents = pgTable(
+  'tool_consent',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    toolId: text('tool_id')
+      .notNull()
+      .references(() => tools.id),
+    circleId: text('circle_id')
+      .notNull()
+      .references(() => circles.id),
+    scopes: text('scopes').array().notNull(),
+    consentedAt: timestamp('consented_at', { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.toolId, t.circleId] }),
+    index('tool_consent_tool_circle_idx').on(t.toolId, t.circleId),
   ],
 )

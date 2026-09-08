@@ -1,6 +1,7 @@
 export * from './circles'
 export * from './cron'
 export * from './developers'
+export * from './governance'
 export * from './phone'
 export * from './templates'
 export * from './tool-api'

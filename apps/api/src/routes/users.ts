@@ -1,10 +1,12 @@
 import { zValidator } from '@hono/zod-validator'
-import { and, avg, count, desc, eq, or } from 'drizzle-orm'
+import { and, avg, count, desc, eq, isNull, or } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { auth } from '../auth'
 import { db } from '../db'
+import { block, listBlocks, unblock } from '../domain/blocks'
+import { listConsents, revokeConsent } from '../domain/consent'
 import { user } from '../db/auth-schema'
 import { posts, responses, reviews } from '../db/schema'
 import { deleteAccount, exportAccount } from '../domain/account'
@@ -34,6 +36,25 @@ export const usersApp = new Hono<AppEnv>()
     return c.json({ deleted: true })
   })
 
+  .get('/me/blocks', async (c) => c.json({ blocks: await listBlocks(c.get('user')!.id) }))
+
+  .get('/me/consents', async (c) => c.json({ consents: await listConsents(c.get('user')!.id) }))
+
+  .delete('/me/consents/:toolId/:circleId', async (c) => {
+    await revokeConsent(c.get('user')!.id, c.req.param('toolId'), c.req.param('circleId'))
+    return c.json({ ok: true })
+  })
+
+  .put('/:id/block', async (c) => {
+    await block(c.get('user')!.id, c.req.param('id'))
+    return c.json({ ok: true })
+  })
+
+  .delete('/:id/block', async (c) => {
+    await unblock(c.get('user')!.id, c.req.param('id'))
+    return c.json({ ok: true })
+  })
+
   .get('/:id/profile', async (c) => {
     const id = c.req.param('id')
     const [profile] = await db
@@ -46,7 +67,7 @@ export const usersApp = new Hono<AppEnv>()
     const [reputation] = await db
       .select({ avgRating: avg(reviews.rating), reviewCount: count() })
       .from(reviews)
-      .where(eq(reviews.revieweeId, id))
+      .where(and(eq(reviews.revieweeId, id), isNull(reviews.hiddenAt)))
 
     const [completed] = await db
       .select({ value: count() })
@@ -69,7 +90,7 @@ export const usersApp = new Hono<AppEnv>()
       })
       .from(reviews)
       .innerJoin(user, eq(reviews.reviewerId, user.id))
-      .where(eq(reviews.revieweeId, id))
+      .where(and(eq(reviews.revieweeId, id), isNull(reviews.hiddenAt)))
       .orderBy(desc(reviews.createdAt))
       .limit(10)
 

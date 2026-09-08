@@ -4,6 +4,8 @@ import { ChevronLeft, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
+import { ConsentPanel, type ConsentRequest } from '@/components/consent-panels'
+import { ItemMenu } from '@/components/item-menu'
 import { Panel } from '@/components/panel'
 import { ToolFrame, type ToolGrant } from '@/components/tool-frame'
 import { Button } from '@/components/ui/button'
@@ -15,15 +17,21 @@ export default function ToolHostPage() {
   const { id, slug } = useParams<{ id: string; slug: string }>()
   const router = useRouter()
   const [grant, setGrant] = useState<ToolGrant | null>(null)
+  const [consent, setConsent] = useState<ConsentRequest | null>(null)
   const [error, setError] = useState('')
   const [feedbackError, setFeedbackError] = useState('')
 
   const mint = useCallback(async () => {
     const res = await api.circles[':id'].tools[':slug'].token.$post({ param: { id, slug } })
+    if (res.status === 428) {
+      setConsent(((await res.json()) as { consent: ConsentRequest }).consent)
+      return null
+    }
     if (!res.ok) {
       setError(await errorText(res))
       return null
     }
+    setConsent(null)
     const next = (await res.json()) as ToolGrant
     setGrant(next)
     return next
@@ -73,10 +81,13 @@ export default function ToolHostPage() {
             <MessageSquare aria-hidden /> 给 {developer.name} 反馈
           </Button>
         )}
+        {grant?.toolId && slug !== '_dev' && <ItemMenu targetType="tool" targetId={grant.toolId} className={developer ? '' : 'ml-auto'} />}
       </div>
       {feedbackError && <p className="text-sm text-destructive">{feedbackError}</p>}
 
-      {error ? (
+      {consent ? (
+        <ConsentPanel circleId={id} request={consent} onConsented={() => void mint()} />
+      ) : error ? (
         <Panel>
           <p className="py-8 text-center text-sm text-muted-foreground">{error}</p>
         </Panel>

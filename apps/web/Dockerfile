@@ -22,6 +22,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 COPY apps/api ./apps/api
 COPY apps/web ./apps/web
 COPY packages/shared ./packages/shared
+COPY PRIVACY.md ./
 ENV NEXT_PUBLIC_API_URL="" \
     NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter web build

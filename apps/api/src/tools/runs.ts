@@ -99,23 +99,35 @@ export async function createRun({ billable = true, ...input }: CreateRunInput): 
 
 const waiters = new Map<string, ((run: ToolRunRow) => void)[]>()
 
+const WAIT_POLL_MS = 500
+
+// 本进程跑完的运行直接唤醒；被别的实例领走的运行靠轮询看到终态
 export async function waitForRun(id: string, timeoutMs: number): Promise<ToolRunRow> {
   const current = await getRun(id)
   if (!current) throw new Error('运行记录不存在')
   if (TERMINAL.includes(current.status)) return current
   return new Promise((resolve) => {
-    const list = waiters.get(id) ?? []
-    const timer = setTimeout(() => {
-      const remaining = (waiters.get(id) ?? []).filter((w) => w !== done)
+    let settled = false
+    const finish = (run: ToolRunRow) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      clearInterval(poll)
+      const remaining = (waiters.get(id) ?? []).filter((w) => w !== finish)
       if (remaining.length > 0) waiters.set(id, remaining)
       else waiters.delete(id)
-      void getRun(id).then((row) => resolve(row ?? current))
-    }, timeoutMs)
-    const done = (run: ToolRunRow) => {
-      clearTimeout(timer)
       resolve(run)
     }
-    list.push(done)
+    const timer = setTimeout(() => {
+      void getRun(id).then((row) => finish(row ?? current))
+    }, timeoutMs)
+    const poll = setInterval(() => {
+      void getRun(id).then((row) => {
+        if (row && TERMINAL.includes(row.status)) finish(row)
+      })
+    }, WAIT_POLL_MS)
+    const list = waiters.get(id) ?? []
+    list.push(finish)
     waiters.set(id, list)
   })
 }

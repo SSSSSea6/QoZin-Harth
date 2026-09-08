@@ -4,6 +4,7 @@ import { databaseUrl, TEST_DB, TEST_TOOLS_DIR } from './test/test-db'
 export default defineConfig({
   test: {
     globalSetup: ['./test/global-setup.ts'],
+    fileParallelism: false,
     testTimeout: 30_000,
     hookTimeout: 120_000,
     env: {

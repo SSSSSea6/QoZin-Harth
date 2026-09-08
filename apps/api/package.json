@@ -13,11 +13,12 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "@better-auth/drizzle-adapter": "^1.7.2",
+    "@better-auth/drizzle-adapter": "1.7.3",
+    "@better-auth/expo": "1.7.3",
     "@harth/shared": "workspace:*",
     "@hono/node-server": "^2.1.1",
     "@hono/zod-validator": "^0.9.1",
-    "better-auth": "^1.7.2",
+    "better-auth": "1.7.3",
     "cron-parser": "5.10.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "1.0.0-rc.4",

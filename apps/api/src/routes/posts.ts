@@ -14,6 +14,7 @@ import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
+import { assertCanSpeak } from '../domain/policy'
 import {
   circles,
   circleTemplates,
@@ -118,6 +119,7 @@ export const postsApp = new Hono<AppEnv>()
     zValidator('json', createPostInput),
     async (c) => {
       const userId = c.get('user')!.id
+      await assertCanSpeak(db, userId)
       const circle = await mustGetCircle(c.req.param('circleId'))
       assertNotArchived(circle)
       if (circle.isDm) throw new HTTPException(400, { message: '双人圈不发帖' })
@@ -276,6 +278,7 @@ export const postsApp = new Hono<AppEnv>()
 
   .post('/:id/comments', zValidator('json', commentInput), async (c) => {
     const userId = c.get('user')!.id
+    await assertCanSpeak(db, userId)
     const post = await mustGetPost(c.req.param('id'))
     const circle = await mustGetCircle(post.circleId)
     assertNotArchived(circle)
@@ -291,6 +294,7 @@ export const postsApp = new Hono<AppEnv>()
 
   .post('/:id/responses', zValidator('json', responseInput), async (c) => {
     const userId = c.get('user')!.id
+    await assertCanSpeak(db, userId)
     const post = await mustGetPost(c.req.param('id'))
     const circle = await mustGetCircle(post.circleId)
     assertNotArchived(circle)
@@ -397,6 +401,7 @@ export const postsApp = new Hono<AppEnv>()
 
   .post('/:id/reviews', zValidator('json', reviewInput), async (c) => {
     const userId = c.get('user')!.id
+    await assertCanSpeak(db, userId)
     const post = await mustGetPost(c.req.param('id'))
     if (post.status !== 'completed') {
       throw new HTTPException(409, { message: '成交后才能互评' })

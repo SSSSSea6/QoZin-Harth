@@ -22,6 +22,7 @@ import { createMiddleware } from 'hono/factory'
 import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { db } from '../db'
+import { assertActive, assertCanSpeak } from '../domain/policy'
 import { user } from '../db/auth-schema'
 import { circles, circleTools, memberships, posts, toolDevSessions, tools, toolStorage } from '../db/schema'
 import { assertNotArchived, getMembership, mustGetCircle, touchCircle } from '../domain/circles'
@@ -99,9 +100,12 @@ const authenticate = createMiddleware<ToolEnv>(async (c, next) => {
     }
     grant.scopes = payload.scopes.filter((scope) => installed.scopes.includes(scope))
   }
-  // 令牌没过期不等于人还在圈里，每次按当前成员身份复核
-  if (grant.userId && !(await getMembership(grant.circleId, grant.userId))) {
-    throw new HTTPException(403, { message: '你已不在这个圈子里' })
+  // 令牌没过期不等于人还在圈里、账号还正常，每次按当前状态复核
+  if (grant.userId) {
+    await assertActive(db, grant.userId)
+    if (!(await getMembership(grant.circleId, grant.userId))) {
+      throw new HTTPException(403, { message: '你已不在这个圈子里' })
+    }
   }
   c.set('grant', grant)
   await next()
@@ -311,6 +315,7 @@ export const toolApiApp = new Hono<ToolEnv>()
     zValidator('json', z.object({ title: z.string(), body: z.string().optional() })),
     async (c) => {
       const grant = c.get('grant')
+      if (grant.userId) await assertCanSpeak(db, grant.userId)
       const parsed = parsePostFields('discussion', c.req.valid('json'))
       if (!parsed) throw new HTTPException(400, { message: '标题或正文不合法' })
       await writableCircle(grant.circleId)

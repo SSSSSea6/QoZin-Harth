@@ -14,6 +14,8 @@ export async function adminSession(request: APIRequestContext): Promise<void> {
   const { user } = (await signIn.json()) as { user: { id: string } }
   const granted = await request.post(`${API_URL}/api/test/admin`, { data: { userId: user.id } })
   expect(granted.ok(), await granted.text()).toBeTruthy()
+  const verified = await request.post(`${API_URL}/api/test/verify-phone`, { data: { userId: user.id } })
+  expect(verified.ok(), await verified.text()).toBeTruthy()
 }
 
 // 发布工具要开发者资格：管理员发一个邀请码，开发者兑换
@@ -116,7 +118,7 @@ export function uniqueName(base: string): string {
   return `${base}${Math.random().toString(36).slice(2, 6)}`
 }
 
-export async function register(page: Page, name: string): Promise<User> {
+export async function register(page: Page, name: string, options: { phone?: boolean } = {}): Promise<User> {
   const email = `u${Date.now()}-${process.pid}-${sequence++}@example.com`
   await page.goto('/')
   await page.getByRole('tab', { name: '注册' }).click()
@@ -128,7 +130,13 @@ export async function register(page: Page, name: string): Promise<User> {
   await form.getByRole('button', { name: '注册' }).click()
   await expect(page.getByRole('heading', { name: '首页' })).toBeVisible()
   const href = await page.locator('header a[href^="/u/"]').getAttribute('href')
-  return { id: href!.slice('/u/'.length), name, email }
+  const id = href!.slice('/u/'.length)
+  // 发言门禁：用例默认拿一个已验证的手机号，绑定流程本身另有用例
+  if (options.phone !== false) {
+    const verified = await page.request.post(`${API_URL}/api/test/verify-phone`, { data: { userId: id } })
+    expect(verified.ok(), await verified.text()).toBeTruthy()
+  }
+  return { id, name, email }
 }
 
 export async function joinSchool(page: Page): Promise<void> {

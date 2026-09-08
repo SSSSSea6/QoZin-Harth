@@ -13,6 +13,7 @@ export default defineConfig({
       BETTER_AUTH_URL: 'http://localhost:3001',
       WEB_URL: 'http://localhost:3000',
       HARTH_TEST_HOOKS: '1',
+      HARTH_SMS_PROVIDER: 'test',
       HARTH_JOBS: '0',
       HARTH_TOOLS_DIR: TEST_TOOLS_DIR,
     },

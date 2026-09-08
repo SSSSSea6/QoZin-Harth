@@ -2,11 +2,12 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { GateError } from '@/components/gate-error'
 import { Panel } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { api, errorText } from '@/lib/api'
+import { api, readError, type ApiError } from '@/lib/api'
 import { useRequireSession } from '@/lib/hooks'
 
 interface ParentOption {
@@ -21,7 +22,7 @@ export default function NewCirclePage() {
   const [parents, setParents] = useState<ParentOption[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [visibility, setVisibility] = useState<'public' | 'private'>('public')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ApiError | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -63,16 +64,16 @@ export default function NewCirclePage() {
             e.preventDefault()
             const name = String(new FormData(e.currentTarget).get('name')).trim()
             if (selected.length === 0) {
-              setError('至少挂到一个圈子下面')
+              setError({ error: '至少挂到一个圈子下面' })
               return
             }
             setBusy(true)
-            setError('')
+            setError(null)
             const res = await api.circles.$post({
               json: { name, visibility, parentIds: selected },
             })
             if (!res.ok) {
-              setError(await errorText(res))
+              setError(await readError(res))
               setBusy(false)
               return
             }
@@ -147,7 +148,7 @@ export default function NewCirclePage() {
             )}
           </fieldset>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <GateError error={error} />
           <div>
             <Button type="submit" disabled={busy || parents.length === 0}>
               {busy ? '点火中…' : '点火'}

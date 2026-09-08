@@ -2,8 +2,11 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { maskPhone } from '@harth/shared'
 import { Avatar } from '@/components/avatar'
 import { Columns } from '@/components/columns'
+import { GateError } from '@/components/gate-error'
+import { BindPhoneDialog } from '@/components/phone-dialog'
 import { Panel, PanelHeader, PanelTitle } from '@/components/panel'
 import { Stars } from '@/components/stars'
 import { Button } from '@/components/ui/button'
@@ -18,8 +21,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { api, API_URL, errorText } from '@/lib/api'
-import { signOut } from '@/lib/auth-client'
+import { api, API_URL, errorText, readError, type ApiError } from '@/lib/api'
+import { authClient, signOut } from '@/lib/auth-client'
 import { timeAgo } from '@/lib/format'
 import { useRequireSession } from '@/lib/hooks'
 
@@ -42,11 +45,12 @@ interface Profile {
 }
 
 export default function ProfilePage() {
-  const { session, pending } = useRequireSession()
+  const { session, pending, refetch } = useRequireSession()
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [error, setError] = useState('')
+  const [dmError, setDmError] = useState<ApiError | null>(null)
 
   useEffect(() => {
     if (!session) return
@@ -76,7 +80,17 @@ export default function ProfilePage() {
   const { reputation } = profile
 
   return (
-    <Columns aside={isSelf ? <AccountPanel email={session.user.email} /> : undefined}>
+    <Columns
+      aside={
+        isSelf ? (
+          <AccountPanel
+            email={session.user.email}
+            phone={session.user.phoneNumberVerified ? (session.user.phoneNumber ?? null) : null}
+            onPhoneChanged={() => void refetch()}
+          />
+        ) : undefined
+      }
+    >
       <Panel>
         <div className="flex items-start gap-4">
           <Avatar seed={profile.id} name={profile.name} size={72} />
@@ -94,16 +108,19 @@ export default function ProfilePage() {
                 const res = await api.circles.dm.$post({
                   json: { userId: profile.id },
                 })
-                if (res.ok) {
-                  const { circle } = await res.json()
-                  router.push(`/c/${circle.id}`)
+                if (!res.ok) {
+                  setDmError(await readError(res))
+                  return
                 }
+                const { circle } = await res.json()
+                router.push(`/c/${circle.id}`)
               }}
             >
               私聊
             </Button>
           )}
         </div>
+        <GateError error={dmError} className="mt-2 text-right text-xs text-destructive" />
 
         <div className="mt-5 border-t pt-4">
           <dl className="grid max-w-[360px] grid-cols-3 gap-4">
@@ -160,12 +177,45 @@ export default function ProfilePage() {
   )
 }
 
-function AccountPanel({ email }: { email: string }) {
+function AccountPanel({
+  email,
+  phone,
+  onPhoneChanged,
+}: {
+  email: string
+  phone: string | null
+  onPhoneChanged: () => void
+}) {
   const router = useRouter()
+  const [phoneError, setPhoneError] = useState('')
   return (
     <Panel>
       <PanelTitle>账号</PanelTitle>
       <p className="text-sm text-muted-foreground">{email}</p>
+      <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3">
+        <div className="min-w-0">
+          <p className="text-sm">{phone ? maskPhone(phone) : '未绑定手机号'}</p>
+          {!phone && <p className="text-[13px] text-muted-foreground">发言前要先绑定，号码不会展示</p>}
+        </div>
+        {phone ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={async () => {
+              setPhoneError('')
+              const { error } = await authClient.$fetch('/update-user', { method: 'POST', body: { phoneNumber: null } })
+              if (error) setPhoneError(error.message ?? '解绑失败')
+              else onPhoneChanged()
+            }}
+          >
+            解绑
+          </Button>
+        ) : (
+          <BindPhoneDialog onBound={onPhoneChanged} />
+        )}
+      </div>
+      {phoneError && <p className="text-sm text-destructive">{phoneError}</p>}
       <div className="mt-3 flex flex-col gap-2">
         <Button
           variant="outline"

@@ -2,13 +2,14 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
+import { GateError } from '@/components/gate-error'
 import { Panel } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { api, errorText } from '@/lib/api'
+import { api, readError, type ApiError } from '@/lib/api'
 import { useRequireSession } from '@/lib/hooks'
 
 interface CircleOption {
@@ -39,7 +40,7 @@ function NewPostPage() {
   const [enabled, setEnabled] = useState<string[] | null>(null)
   const [template, setTemplate] = useState<TemplateChoice>(presetTemplate)
   const [free, setFree] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ApiError | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -94,13 +95,13 @@ function NewPostPage() {
                       : Math.round(Number(data.get('price') || 0) * 100),
                   }
             setBusy(true)
-            setError('')
+            setError(null)
             const res = await api.posts.circles[':circleId'].$post({
               param: { circleId },
               json: { templateKey: activeTemplate, fields },
             })
             if (!res.ok) {
-              setError(await errorText(res))
+              setError(await readError(res))
               setBusy(false)
               return
             }
@@ -229,7 +230,7 @@ function NewPostPage() {
             </>
           )}
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <GateError error={error} />
           <div className="flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               取消

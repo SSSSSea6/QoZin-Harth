@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { Avatar } from '@/components/avatar'
+import { GateError } from '@/components/gate-error'
 import { Columns } from '@/components/columns'
 import { Panel, PanelTitle } from '@/components/panel'
 import { PostList, type PostListItemData } from '@/components/post-list'
@@ -22,7 +23,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { api, errorText } from '@/lib/api'
+import { api, errorText, readError, type ApiError } from '@/lib/api'
 import { daysUntil, timeAgo } from '@/lib/format'
 import { useLoad, useRequireSession } from '@/lib/hooks'
 
@@ -876,7 +877,7 @@ function DmPage({
   const archived = circle.lifecycle.state === 'archived'
   const [messages, setMessages] = useState<Message[] | null>(null)
   const [draft, setDraft] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ApiError | null>(null)
 
   const load = useCallback(async () => {
     const res = await api.circles[':id'].messages.$get({
@@ -896,11 +897,11 @@ function DmPage({
       json: { content },
     })
     if (!res.ok) {
-      setError(await errorText(res))
+      setError(await readError(res))
       return
     }
     setDraft('')
-    setError('')
+    setError(null)
     void load()
   }
 
@@ -978,7 +979,7 @@ function DmPage({
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send()
               }}
             />
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <GateError error={error} />
             <div className="flex justify-end">
               <Button size="sm" onClick={send} disabled={!draft.trim()}>
                 发送

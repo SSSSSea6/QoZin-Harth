@@ -10,11 +10,20 @@ export const api = hc<AppType>(API_URL, {
     fetch(input, { ...init, credentials: 'include' }),
 }).api
 
-export async function errorText(res: Response): Promise<string> {
+export interface ApiError {
+  error: string
+  code?: string
+}
+
+export async function readError(res: Response): Promise<ApiError> {
   try {
-    const body = (await res.json()) as { error?: string }
-    return body.error ?? '出错了，稍后再试'
+    const body = (await res.json()) as Partial<ApiError>
+    return { error: body.error ?? '出错了，稍后再试', code: body.code }
   } catch {
-    return '出错了，稍后再试'
+    return { error: '出错了，稍后再试' }
   }
+}
+
+export async function errorText(res: Response): Promise<string> {
+  return (await readError(res)).error
 }

@@ -5,14 +5,14 @@ import { useEffect } from 'react'
 import { useSession } from './auth-client'
 
 export function useRequireSession() {
-  const { data: session, isPending } = useSession()
+  const { data: session, isPending, refetch } = useSession()
   const router = useRouter()
 
   useEffect(() => {
     if (!isPending && !session) router.replace('/')
   }, [isPending, session, router])
 
-  return { session, pending: isPending }
+  return { session, pending: isPending, refetch }
 }
 
 // 加载放到下一轮事件循环，避开 react-hooks/set-state-in-effect

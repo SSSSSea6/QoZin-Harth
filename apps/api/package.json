@@ -13,6 +13,8 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@alicloud/dysmsapi20170525": "4.6.0",
+    "@alicloud/openapi-core": "^1.0.8",
     "@better-auth/drizzle-adapter": "1.7.3",
     "@better-auth/expo": "1.7.3",
     "@harth/shared": "workspace:*",

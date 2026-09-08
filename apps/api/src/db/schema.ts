@@ -476,3 +476,41 @@ export const toolUsage = pgTable(
     index('tool_usage_owner_day_idx').on(t.ownerId, t.day),
   ],
 )
+
+// 发码记录：手机号、账号、来源 IP 三个维度的限额都从这里数，7 天后清理
+export const smsSends = pgTable(
+  'sms_send',
+  {
+    id: id(),
+    phone: text('phone').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    ip: text('ip'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('sms_send_phone_idx').on(t.phone, t.createdAt),
+    index('sms_send_user_idx').on(t.userId, t.createdAt),
+    index('sms_send_ip_idx').on(t.ip, t.createdAt),
+  ],
+)
+
+// 一行是当前状态：禁言到 until，封禁到解除；历史在处置记录里
+export const userRestrictions = pgTable(
+  'user_restriction',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => user.id),
+    kind: text('kind', { enum: ['mute', 'ban'] }).notNull(),
+    until: timestamp('until', { withTimezone: true }),
+    reason: text('reason').notNull(),
+    moderationId: text('moderation_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('user_restriction_kind', sql`${t.kind} IN ('mute', 'ban')`),
+    check('user_restriction_mute_until', sql`${t.kind} <> 'mute' OR ${t.until} IS NOT NULL`),
+  ],
+)

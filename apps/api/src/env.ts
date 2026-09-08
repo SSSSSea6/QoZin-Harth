@@ -22,9 +22,50 @@ if (process.env.NODE_ENV === 'production' && BETTER_AUTH_SECRET === 'change-me')
   throw new Error('生产环境必须设置随机的 BETTER_AUTH_SECRET（openssl rand -base64 32）')
 }
 
+const PRODUCTION = process.env.NODE_ENV === 'production'
+
+// 站点模式：production 是对外运营，preview 是内部预览；对外运营时门禁不能关、测试钩子不能开
+const SITE_MODE = process.env.HARTH_SITE_MODE ?? (PRODUCTION ? 'production' : 'preview')
+if (SITE_MODE !== 'production' && SITE_MODE !== 'preview') {
+  throw new Error('HARTH_SITE_MODE 只能是 production 或 preview')
+}
+const PUBLIC_SITE = SITE_MODE === 'production'
+const PHONE_REQUIRED_RAW = process.env.HARTH_PHONE_REQUIRED ?? '1'
+if (PHONE_REQUIRED_RAW !== '1' && PHONE_REQUIRED_RAW !== '0') {
+  throw new Error('HARTH_PHONE_REQUIRED 只能是 1 或 0')
+}
+if (PUBLIC_SITE && PHONE_REQUIRED_RAW !== '1') {
+  throw new Error('对外运营（HARTH_SITE_MODE=production）必须 HARTH_PHONE_REQUIRED=1')
+}
+if (PRODUCTION && process.env.HARTH_TEST_HOOKS === '1') {
+  throw new Error('生产构建不能开 HARTH_TEST_HOOKS')
+}
+const SMS_PROVIDER = process.env.HARTH_SMS_PROVIDER ?? (process.env.HARTH_SMS_ACCESS_KEY_ID ? 'aliyun' : 'none')
+if (!['aliyun', 'test', 'none'].includes(SMS_PROVIDER)) {
+  throw new Error('HARTH_SMS_PROVIDER 只能是 aliyun、test 或不设')
+}
+if (SMS_PROVIDER === 'test' && (PRODUCTION || process.env.HARTH_TEST_HOOKS !== '1')) {
+  throw new Error('HARTH_SMS_PROVIDER=test 只能和 HARTH_TEST_HOOKS=1 一起用，且不能在生产构建')
+}
+
 export const env = {
   DATABASE_URL: required('DATABASE_URL'),
   BETTER_AUTH_SECRET,
+  PRODUCTION,
+  SITE_MODE: SITE_MODE as 'production' | 'preview',
+  PHONE_REQUIRED: PHONE_REQUIRED_RAW === '1',
+  SMS:
+    SMS_PROVIDER === 'aliyun'
+      ? {
+          provider: 'aliyun' as const,
+          accessKeyId: required('HARTH_SMS_ACCESS_KEY_ID'),
+          accessKeySecret: required('HARTH_SMS_ACCESS_KEY_SECRET'),
+          signName: required('HARTH_SMS_SIGN_NAME'),
+          templateCode: required('HARTH_SMS_TEMPLATE_CODE'),
+        }
+      : SMS_PROVIDER === 'test'
+        ? { provider: 'test' as const }
+        : null,
   TOP_CIRCLE: {
     id: TOP_CIRCLE_ID,
     name: process.env.HARTH_TOP_CIRCLE_NAME ?? '南京航空航天大学',

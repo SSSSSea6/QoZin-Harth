@@ -3,12 +3,16 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { db } from '../db'
+import { user } from '../db/auth-schema'
 import { circles } from '../db/schema'
 import { grantTestAdmin } from '../env'
+import { lastTestCode } from '../sms'
 import { runSweep } from '../jobs/sweep'
 import { chargeHolding } from '../tools/fuel'
 import { makeSchedulesDue, tickSchedules } from '../tools/schedules'
 import { getTool } from '../tools/service'
+
+const fakePhone = () => `+861${Math.floor(3_000_000_000 + Math.random() * 6_999_999_999)}`
 
 // 只在 HARTH_TEST_HOOKS=1 时挂载，测试里用来指定管理员、改写时间、触发巡查与定时任务
 export const testHooksApp = new Hono()
@@ -16,6 +20,19 @@ export const testHooksApp = new Hono()
     grantTestAdmin(c.req.valid('json').userId)
     return c.json({ ok: true })
   })
+  .get('/sms', zValidator('query', z.object({ phone: z.string() })), (c) => {
+    return c.json({ code: lastTestCode(c.req.valid('query').phone) })
+  })
+  .post(
+    '/verify-phone',
+    zValidator('json', z.object({ userId: z.string(), phone: z.string().optional() })),
+    async (c) => {
+      const { userId, phone } = c.req.valid('json')
+      const value = phone ?? fakePhone()
+      await db.update(user).set({ phoneNumber: value, phoneNumberVerified: true }).where(eq(user.id, userId))
+      return c.json({ phone: value })
+    },
+  )
   .post(
     '/fuel-holding',
     zValidator('json', z.object({ now: z.iso.datetime().optional() })),

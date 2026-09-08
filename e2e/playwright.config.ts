@@ -31,6 +31,7 @@ export default defineConfig({
         BETTER_AUTH_URL: API_URL,
         BETTER_AUTH_SECRET: 'e2e-only-secret-never-use-in-production',
         HARTH_TEST_HOOKS: '1',
+        HARTH_SMS_PROVIDER: 'test',
         HARTH_JOBS: '0',
       },
     },

@@ -14,6 +14,7 @@ import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import { db } from '../db'
 import { user } from '../db/auth-schema'
+import { assertCanSpeak } from '../domain/policy'
 import {
   circleParents,
   circles,
@@ -118,6 +119,7 @@ export const circlesApp = new Hono<AppEnv>()
 
   .post('/', zValidator('json', createCircleInput), async (c) => {
     const userId = c.get('user')!.id
+    await assertCanSpeak(db, userId)
     const input = c.req.valid('json')
 
     const parentIds = [...new Set(input.parentIds)]
@@ -179,6 +181,7 @@ export const circlesApp = new Hono<AppEnv>()
     zValidator('json', z.object({ userId: z.string() })),
     async (c) => {
       const me = c.get('user')!.id
+      await assertCanSpeak(db, me)
       const { userId: target } = c.req.valid('json')
       if (target === me) {
         throw new HTTPException(400, { message: '不能和自己建双人圈' })
@@ -462,6 +465,7 @@ export const circlesApp = new Hono<AppEnv>()
 
   .post('/:id/messages', zValidator('json', messageInput), async (c) => {
     const userId = c.get('user')!.id
+    await assertCanSpeak(db, userId)
     const circle = await mustGetCircle(c.req.param('id'))
     assertDm(circle)
     assertNotArchived(circle)

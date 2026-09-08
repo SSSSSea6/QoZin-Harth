@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { Avatar } from '@/components/avatar'
+import { GateError } from '@/components/gate-error'
 import { Columns } from '@/components/columns'
 import { Panel, PanelHeader } from '@/components/panel'
 import { PostStatusBadge } from '@/components/post-status'
@@ -11,7 +12,7 @@ import { StarInput } from '@/components/stars'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { api, errorText } from '@/lib/api'
+import { api, errorText, readError, type ApiError } from '@/lib/api'
 import { formatPrice, timeAgo } from '@/lib/format'
 import { useLoad, useRequireSession } from '@/lib/hooks'
 
@@ -248,7 +249,7 @@ function CommentsPanel({
   onChanged: () => void
 }) {
   const [draft, setDraft] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ApiError | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit() {
@@ -261,11 +262,11 @@ function CommentsPanel({
     })
     setBusy(false)
     if (!res.ok) {
-      setError(await errorText(res))
+      setError(await readError(res))
       return
     }
     setDraft('')
-    setError('')
+    setError(null)
     onChanged()
   }
 
@@ -285,7 +286,7 @@ function CommentsPanel({
             maxLength={1000}
             placeholder="写下你的回复…"
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <GateError error={error} />
           <div className="flex justify-end">
             <Button onClick={submit} disabled={busy || !draft.trim()}>
               {busy ? '回复中…' : '回复'}
@@ -408,7 +409,7 @@ function ResponderOpenView({
 }) {
   const mine = post.responses[0]
   const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ApiError | null>(null)
 
   if (mine) {
     return (
@@ -428,7 +429,7 @@ function ResponderOpenView({
         maxLength={500}
         placeholder="说一句怎么交接，例：今晚七点，二食堂门口？"
       />
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <GateError error={error} />
       <div>
         <Button
           size="sm"
@@ -438,7 +439,7 @@ function ResponderOpenView({
               param: { id: post.id },
               json: { message: message.trim() },
             })
-            if (!res.ok) setError(await errorText(res))
+            if (!res.ok) setError(await readError(res))
             else onChanged()
           }}
         >
@@ -530,7 +531,7 @@ function CompletedView({
 }) {
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<ApiError | null>(null)
 
   return (
     <section className="flex flex-col gap-3">
@@ -549,7 +550,7 @@ function CompletedView({
               maxLength={500}
               placeholder="一句话就好（选填）"
             />
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <GateError error={error} />
             <div>
               <Button
                 size="sm"
@@ -561,7 +562,7 @@ function CompletedView({
                       comment: comment.trim() || undefined,
                     },
                   })
-                  if (!res.ok) setError(await errorText(res))
+                  if (!res.ok) setError(await readError(res))
                   else onChanged()
                 }}
               >

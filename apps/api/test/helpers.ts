@@ -40,14 +40,20 @@ export class TestUser {
     return this.json<T>(path, { method: 'DELETE' })
   }
 
-  async signUp(email: string): Promise<string> {
+  // 默认顺手把手机号标成已验证（发言门禁），只有绑定流程本身的测试才不要
+  async signUp(email: string, options: { phone?: boolean } = {}): Promise<string> {
     const { status, body } = await this.post('/api/auth/sign-up/email', {
       email,
       password: 'password-123',
       name: this.name,
     })
     expect(status).toBe(200)
-    return (body as { user: { id: string } }).user.id
+    const id = (body as { user: { id: string } }).user.id
+    if (options.phone !== false) {
+      const verified = await this.post('/api/test/verify-phone', { userId: id })
+      expect(verified.status).toBe(200)
+    }
+    return id
   }
 }
 

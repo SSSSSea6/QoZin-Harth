@@ -4,6 +4,7 @@ import { app } from './app'
 import { pool } from './db'
 import { migrateDatabase } from './db/migrate'
 import { seed } from './db/seed'
+import { cleanupSmsSends } from './domain/phone'
 import { env } from './env'
 import { runSweep } from './jobs/sweep'
 import { chargeHolding } from './tools/fuel'
@@ -23,10 +24,12 @@ async function startJobs(): Promise<PgBoss | null> {
   await boss.start()
   await boss.createQueue(SWEEP_QUEUE)
   await boss.work(SWEEP_QUEUE, async () => {
-    const result = await runSweep(new Date())
+    const now = new Date()
+    const result = await runSweep(now)
     if (result.hibernated || result.archived || result.woken) {
       console.log('[lifecycle]', result)
     }
+    await cleanupSmsSends(now)
   })
   await boss.schedule(SWEEP_QUEUE, '13 * * * *', {}, { tz: 'Asia/Shanghai' })
   if (env.TOOL_RUNS) {

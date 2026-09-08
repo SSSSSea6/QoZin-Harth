@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
 import { auth } from './auth'
 import { env } from './env'
-import { sessionMiddleware } from './middleware/session'
+import { enforceRestrictions, sessionMiddleware } from './middleware/session'
 import { circleToolsApp } from './routes/circle-tools'
 import { circlesApp } from './routes/circles'
 import { developersApp } from './routes/developers'
@@ -13,6 +13,8 @@ import { toolApiApp } from './routes/tool-api'
 import { toolStaticApp } from './routes/tool-static'
 import { toolsApp } from './routes/tools'
 import { usersApp } from './routes/users'
+import { errorCode } from './http'
+import { smsReady } from './sms'
 import { configureToolRuns } from './tools/runs'
 
 export const app = new Hono()
@@ -22,7 +24,10 @@ export const app = new Hono()
   .route('/api/tool', toolApiApp)
   .route('/', toolStaticApp)
   .use(sessionMiddleware)
-  .get('/health', (c) => c.json({ ok: true }))
+  .use(enforceRestrictions)
+  .get('/health', (c) =>
+    c.json({ ok: true, mode: env.SITE_MODE, phoneRequired: env.PHONE_REQUIRED, sms: smsReady() ? 'ready' : 'unconfigured' }),
+  )
   .route('/api/circles', circlesApp)
   .route('/api/circles', circleToolsApp)
   .route('/api/posts', postsApp)
@@ -39,7 +44,8 @@ configureToolRuns(app)
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) {
-    return c.json({ error: err.message }, err.status)
+    const code = errorCode(err)
+    return c.json(code ? { error: err.message, code } : { error: err.message }, err.status)
   }
   console.error(err)
   return c.json({ error: '服务器开小差了，稍后再试' }, 500)

@@ -163,9 +163,9 @@ jobs:
       - run: |
           curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz | tar xz
           for f in api.tar.gz web.tar.gz postgres.tar.gz caddy.tar.gz; do
-            ./aliyun oss cp "out/$f" "oss://harth-images/${{ github.sha }}/$f" -f -e oss-cn-hangzhou.aliyuncs.com
+            ./aliyun oss cp "out/$f" "oss://harth-images/${{ github.sha }}/$f" -f -e oss-cn-hangzhou.aliyuncs.com --region cn-hangzhou
           done
-          ./aliyun oss cp out/sha oss://harth-images/latest -f -e oss-cn-hangzhou.aliyuncs.com
+          ./aliyun oss cp out/sha oss://harth-images/latest -f -e oss-cn-hangzhou.aliyuncs.com --region cn-hangzhou
         env:
           ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
           ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}

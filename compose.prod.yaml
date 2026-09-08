@@ -1,9 +1,5 @@
 services:
-  db:
-    image: ghcr.io/sssssea6/qozin-harth-postgres:17-alpine
   api:
-    image: ghcr.io/sssssea6/qozin-harth-api:${HARTH_IMAGE_TAG:-latest}
+    image: harth-api:${HARTH_IMAGE_TAG:?}
   web:
-    image: ghcr.io/sssssea6/qozin-harth-web:${HARTH_IMAGE_TAG:-latest}
-  caddy:
-    image: ghcr.io/sssssea6/qozin-harth-caddy:2-alpine
+    image: harth-web:${HARTH_IMAGE_TAG:?}

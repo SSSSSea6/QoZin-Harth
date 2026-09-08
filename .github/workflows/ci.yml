@@ -126,28 +126,17 @@ jobs:
     needs: [check, e2e, compose]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/api/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/sssssea6/qozin-harth-api:latest
-            ghcr.io/sssssea6/qozin-harth-api:${{ github.sha }}
+          load: true
+          tags: harth-api:${{ github.sha }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
 
@@ -155,21 +144,31 @@ jobs:
         with:
           context: .
           file: apps/web/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/sssssea6/qozin-harth-web:latest
-            ghcr.io/sssssea6/qozin-harth-web:${{ github.sha }}
+          load: true
+          tags: harth-web:${{ github.sha }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
 
       - run: |
-          for pair in postgres:17-alpine=qozin-harth-postgres:17-alpine caddy:2-alpine=qozin-harth-caddy:2-alpine; do
-            src=${pair%%=*}
-            dst=ghcr.io/sssssea6/${pair#*=}
-            docker pull "$src"
-            docker tag "$src" "$dst"
-            docker push "$dst"
+          docker pull postgres:17-alpine
+          docker pull caddy:2-alpine
+          mkdir -p out
+          docker save harth-api:${{ github.sha }} | gzip -1 > out/api.tar.gz
+          docker save harth-web:${{ github.sha }} | gzip -1 > out/web.tar.gz
+          docker save postgres:17-alpine | gzip -1 > out/postgres.tar.gz
+          docker save caddy:2-alpine | gzip -1 > out/caddy.tar.gz
+          printf '%s' "${{ github.sha }}" > out/sha
+          ls -la out
+
+      - run: |
+          curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz | tar xz
+          for f in api.tar.gz web.tar.gz postgres.tar.gz caddy.tar.gz; do
+            ./aliyun oss cp "out/$f" "oss://harth-images/${{ github.sha }}/$f" -f -e oss-cn-hangzhou.aliyuncs.com
           done
+          ./aliyun oss cp out/sha oss://harth-images/latest -f -e oss-cn-hangzhou.aliyuncs.com
+        env:
+          ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ secrets.ALIYUN_ACCESS_KEY_ID }}
+          ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}
 
   gitleaks:
     runs-on: ubuntu-latest

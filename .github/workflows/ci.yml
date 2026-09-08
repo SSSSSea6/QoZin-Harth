@@ -112,6 +112,7 @@ jobs:
           curl -fsS http://localhost/ | grep -q 火塘
           curl -fsS -o /dev/null http://localhost/logo.png
           curl -fsS -o /dev/null http://localhost/wordmark.svg
+          curl -fsS http://localhost/privacy | grep -q 手机号
           curl -fsS -H "Host: tools.localhost" http://localhost/_harth/sdk.js | grep -q harth
 
       - run: |

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { maskPhone } from '@harth/shared'
@@ -240,12 +241,9 @@ function AccountPanel({
       </div>
       <p className="mt-3 text-[13px] text-muted-foreground">
         数据怎么处理，见{' '}
-        <a
-          href="https://github.com/SSSSSea6/QoZin-Harth/blob/main/PRIVACY.md"
-          className="underline underline-offset-2 hover:text-foreground"
-        >
+        <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">
           隐私说明
-        </a>
+        </Link>
         。
       </p>
       <div className="mt-6 border-t pt-4">
